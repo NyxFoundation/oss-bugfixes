@@ -180,3 +180,58 @@ def test_decide_is_pure_in_its_four_inputs():
     b = decide(touched=True, trivial=False, docs_only=False,
                found=[Signature.GUARD_ADDED])
     assert a == b
+
+
+# --- the veto: a checkable fact outranks a model's guess --------------------
+
+COMMENT_ABOUT_A_CONSTANT = (
+    "--- a/SafeERC20.sol\n+++ b/SafeERC20.sol\n@@ -78,7 +78,7 @@\n"
+    "             mstore(add(callData, 36), amount)\n"
+    "-            // We use 100 because the calldata length is 4 + 32 * 2.\n"
+    "+            // We use 68 because the calldata length is 4 + 32 * 2.\n"
+    "             let callStatus := call(gas(), token, 0, callData, 68, 0, 0)\n")
+
+
+def test_a_comment_about_a_constant_is_not_a_constant():
+    """Observed in solmate's "📝 Comment fixes": every changed line was a
+    comment, including `// We use 100 because…` corrected to `// We use 68…`
+    while the code beside it always read 68. A model reported it as "corrects
+    the calldata length constants … fixing a functional bug". It had read a
+    comment about a constant as the constant.
+
+    The structural engine strips comments before it looks at anything, so it
+    cannot make that mistake — which is why its refutation outranks a model's
+    positive verdict.
+    """
+    v = classify(parse(COMMENT_ABOUT_A_CONSTANT))
+    assert v.is_bugfix is False
+    assert v.ground is Ground.NO_TOKEN_CHANGE
+
+
+def test_the_veto_overrules_a_model_positive_and_says_so():
+    from ossbugfix.classify.base import CommitView, Verdict
+    from ossbugfix.pipeline import veto_unprovable_positives
+
+    view = CommitView(id="x", repo="o/r", sha="a" * 40, url="u",
+                      subject="Comment fixes", body="", files=["SafeERC20.sol"],
+                      insertions=1, deletions=1, diff=COMMENT_ABOUT_A_CONSTANT)
+    verdict = Verdict(is_bugfix=True, is_security_fix=False,
+                      rationale="corrects the calldata length constants",
+                      classifier="llm:openai")
+    assert veto_unprovable_positives([view], [verdict]) == 1
+    assert verdict.is_bugfix is False
+    assert "overruled: no_token_change" in verdict.rationale
+    assert "corrects the calldata length" in verdict.rationale, \
+        "the overruled claim must stay visible, not be erased"
+
+
+def test_the_veto_leaves_a_real_fix_alone():
+    from ossbugfix.classify.base import CommitView, Verdict
+    from ossbugfix.pipeline import veto_unprovable_positives
+
+    view = CommitView(id="x", repo="o/r", sha="b" * 40, url="u", subject="fix",
+                      body="", files=["A.sol"], insertions=1, deletions=0,
+                      diff=GUARD)
+    verdict = Verdict(is_bugfix=True, is_security_fix=True, classifier="llm:openai")
+    assert veto_unprovable_positives([view], [verdict]) == 0
+    assert verdict.is_bugfix is True

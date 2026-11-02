@@ -332,10 +332,59 @@ def run_diffs(domain: str, repos: Sequence[Repo], *, limit_per_repo: int = 0,
 
 # --- stage 5: classify ------------------------------------------------------
 
+#: Grounds on which the structural engine refutes a commit by checking a fact
+#: rather than by forming an opinion. A model verdict cannot outrank these.
+PROVABLE_REFUTATIONS = frozenset({"empty_diff", "no_token_change", "docs_only"})
+
+
+def veto_unprovable_positives(views: Sequence[CommitView],
+                              verdicts: Sequence) -> int:
+    """Let a checkable fact overrule a model's guess, in place.
+
+    A model reads the diff as text and can be fooled by what the text says
+    about itself. Observed, in `solmate` commit "📝 Comment fixes": all 24
+    changed lines were comments — including `// We use 100 because…` corrected
+    to `// We use 68 because…`, while the code beside it always read 68 — and
+    the model reported "corrects the calldata length constants … fixing a
+    functional bug". It had read a comment about a constant as the constant.
+
+    The structural engine cannot make that mistake: it strips comments before
+    it looks at anything. So when it reports `no_token_change`, that is a fact
+    about the diff, not a competing opinion, and it wins. The override is
+    recorded in the rationale so the disagreement stays visible rather than
+    being quietly resolved.
+
+    Returns how many verdicts were overridden.
+    """
+    from .detect import classify as structural_classify
+    from .detect import parse as structural_parse
+
+    overridden = 0
+    for view, verdict in zip(views, verdicts):
+        if verdict.is_bugfix is not True and verdict.is_security_fix is not True:
+            continue
+        if not view.diff:
+            continue
+        ground = structural_classify(structural_parse(view.diff)).ground.value
+        if ground not in PROVABLE_REFUTATIONS:
+            continue
+        was = (f"model said bugfix={verdict.is_bugfix} "
+               f"security={verdict.is_security_fix}")
+        verdict.is_bugfix = False
+        verdict.is_security_fix = False
+        verdict.severity = ""
+        verdict.rationale = (
+            f"[overruled: {ground}] {was}, but the diff changes no code token. "
+            + (verdict.rationale or ""))[:1000]
+        overridden += 1
+    return overridden
+
+
 def run_classify(domain: str, repos: Sequence[Repo], classifier: Classifier, *,
                  min_signals: int = 0, limit_per_repo: int = 0, batch: int = 50,
                  with_diffs: bool = True, overwrite_human: bool = False,
-                 skip_classified: bool = True, quiet: bool = False) -> StageReport:
+                 skip_classified: bool = True, veto_trivial: bool = True,
+                 quiet: bool = False) -> StageReport:
     st = StageState(domain, Stage.CLASSIFY)
     rep = StageReport(Stage.CLASSIFY)
     sink = Sink(domain)
@@ -374,6 +423,11 @@ def run_classify(domain: str, repos: Sequence[Repo], classifier: Classifier, *,
                 rep.notes.append(f"{repo.slug}: {type(exc).__name__}: {exc}")
                 print(f"  [classify] {repo.slug}: FAILED — {exc}", file=sys.stderr)
                 break
+            if veto_trivial and with_diffs:
+                n = veto_unprovable_positives(views, verdicts)
+                if n and not quiet:
+                    print(f"  [classify] {repo.slug}: {n} positive(s) overruled "
+                          f"by a provable refutation")
             out = chunk.copy()
             for col, values in _verdict_columns(verdicts).items():
                 out[col] = values

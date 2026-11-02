@@ -140,12 +140,54 @@ Each tightening came from a named failure, not from tuning:
   Likewise `ordering_changed` fired on reordered function parameters, so it now
   requires an external call to be present at all.
 
-**The evaluation is nonetheless inconclusive, and in the honest direction.**
-The reference set at the time of writing holds 1 positive in 384 labelled
-commits. Precision and recall for a positive-detector cannot be estimated from
-one positive, so the right statement is: *the deterministic core over-fires by
-roughly an order of magnitude relative to the model's base rate, and the
-measurement needed to say by how much is still running.*
+### The evaluation, once there were positives to evaluate against
+
+The first attempt at this was worthless: the reference set held 1 positive in
+384 labelled commits, and precision cannot be estimated from one positive. The
+cause turned out to be the model, not the corpus — `deepseek-v4-pro` returned
+an empty `content` on about a third of calls and took a 94.6 s median.
+Switching to `gpt-oss:120b` (11.8 s median, 4/4 decided in a spot check) gave a
+usable reference.
+
+Against **459 model-labelled commits** (64 bug fixes, 39 security fixes):
+
+| | decided | abstained | TP | TN | FP | FN | precision | recall |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `is_bugfix` | 104 (23%) | 355 | 11 | 66 | 26 | 1 | **0.30** | **0.92** |
+| `is_security_fix` | 104 (23%) | 355 | 9 | 68 | 27 | 0 | **0.25** | **1.00** |
+
+That is the profile of a filter, stated plainly: it nearly never misses a real
+fix, and three or four of every five things it points at are not one.
+
+### Its refutations were right every time — including where the model was not
+
+Of the 67 commits the engine refuted, the model agreed on 66. The single
+disagreement is the most instructive row in this corpus.
+
+`solmate` commit **"📝 Comment fixes"**: all 24 changed lines are comments,
+among them
+
+```diff
+-            // We use 100 because the calldata length is 4 + 32 * 2.
++            // We use 68 because the calldata length is 4 + 32 * 2.
+             let callStatus := call(gas(), token, 0, callData, 68, 0, 0)
+```
+
+The code beside it always read `68`; the *comment* was wrong and got fixed.
+The model reported: *"corrects the calldata length constants (changing 100/64
+to the correct 68) used in ERC20 calls, fixing a functional bug"*. It had read
+a comment about a constant as the constant.
+
+The structural engine cannot make that mistake — it strips comments before it
+looks at anything. So the refutations are **67 of 67 correct**, and the
+reference, not the classifier, was wrong.
+
+This is now a pipeline rule rather than an anecdote. A ground of
+`no_token_change`, `empty_diff` or `docs_only` is a *fact about the diff*, not
+a competing opinion, so it overrules a model's positive verdict and records
+the override in the rationale (`--no-veto` turns it off). A model that reads
+the diff as text can be fooled by what the text says about itself; a function
+that tokenises first cannot.
 
 ## The conclusion, and why it matches the literature
 
@@ -156,17 +198,19 @@ exactly what an AST or a code property graph provides and a token stream does
 not. That is why VFFinder, Fixseeker and GraphSPD all build graphs, and it is
 why round 3 is where hand-written token rules stop improving.
 
-So the Lean core is **a filter, not a replacement**:
+So the deterministic core is **a filter, not a replacement**:
 
 ```
-2,418 commits
-   ├─ 346 (14%)  refuted with a proof     → never reach a model
-   ├─  196 (8%)  carry a structural shape → ranked first for the model
-   └─ 1,876 (78%) abstained               → the model's actual work
+5,607 commits
+   ├─   471 (8%)  refuted — and right 67/67 where a model disagreed
+   ├─   566 (10%) carry a structural shape → ranked first, precision ~0.3
+   └─ 4,570 (82%) abstained                → the model's actual work
 ```
 
-It removes a seventh of the corpus for free, orders the rest, and attaches a
-machine-checked reason to every answer it does give.
+It removes commits a model never needs to see, orders the rest, attaches a
+checkable reason to every answer it gives, and — on the evidence above — is
+allowed to overrule the model where its answer is a fact rather than a
+judgement.
 
 ## Where a GNN fits
 
