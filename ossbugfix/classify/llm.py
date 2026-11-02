@@ -275,16 +275,36 @@ class LLMClassifier(Classifier):
             "messages": [{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": prompt}],
             "temperature": 0,
-            "max_tokens": 700,
+            # Reasoning models spend budget before they emit any content. At
+            # 700 a long chain of thought left `content` empty on roughly a
+            # third of commits, which arrived as "unparseable reply: \'\'".
+            "max_tokens": 1_600,
         }
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         data = self._post(f"{self.base_url.rstrip('/')}/chat/completions", payload, headers)
         try:
-            return data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            msg = choice["message"]
         except (KeyError, IndexError, TypeError) as exc:
             raise ClassifyError(f"unexpected response shape: {str(data)[:200]}") from exc
+
+        content = (msg.get("content") or "").strip()
+        if content:
+            return content
+        # A reasoning model may put everything in its own channel and leave
+        # `content` empty. The JSON object is usually in there, so look before
+        # throwing the whole call away.
+        for alt in ("reasoning", "reasoning_content", "thinking"):
+            text = (msg.get(alt) or "").strip()
+            if text and _extract_json(text) is not None:
+                return text
+        reason = choice.get("finish_reason") or "unknown"
+        if reason == "length":
+            raise _Retryable(f"model produced no content before hitting the token "
+                             f"limit (finish_reason={reason})")
+        raise ClassifyError(f"model returned empty content (finish_reason={reason})")
 
     def _call_ollama(self, prompt: str) -> str:
         payload = {"model": self.model or "qwen2.5-coder",

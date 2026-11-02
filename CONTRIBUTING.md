@@ -46,7 +46,7 @@ how the classifier's calibration gets measured at all.
 
 ```bash
 uv venv && uv pip install -e ".[dev]"
-uv run python -m pytest -q          # 65 tests, offline, builds real git repos
+uv run python -m pytest -q          # 68 tests, offline, builds real git repos
 uv run oss-bugfixes validate        # every registry parses
 ```
 

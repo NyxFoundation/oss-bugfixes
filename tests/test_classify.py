@@ -83,3 +83,12 @@ def test_a_real_rationale_is_not_overwritten_by_an_error():
     from ossbugfix.classify.base import Verdict
     row = Verdict(rationale="model said no", error="late warning").as_row()
     assert row["rationale"] == "model said no"
+
+
+def test_json_is_recovered_from_a_reasoning_channel():
+    """A reasoning model can leave `content` empty and put the answer in its
+    own channel. Throwing that call away cost a third of one sweep."""
+    text = ("We need to decide. The diff adds a bounds check.\n"
+            '{"is_bugfix": true, "is_security_fix": true, "confidence": 0.8}')
+    obj = _extract_json(text)
+    assert obj is not None and obj["is_bugfix"] is True
