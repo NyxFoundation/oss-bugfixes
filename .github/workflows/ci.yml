@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install
+        run: uv pip install --system -e ".[dev]"
+
+      # The registries are the coverage claim, so a malformed one is a build
+      # failure rather than something you find out about mid-sweep.
+      - name: Validate every registry
+        run: oss-bugfixes validate
+
+      # Offline: the fixtures build real git repositories in a tmpdir, so the
+      # walk, diff and sink stages run against actual git behaviour.
+      - name: Tests
+        run: python -m pytest -q
+
+      # Proves the whole chain end to end without a network or an API key.
+      - name: Smoke the pipeline on a local repository
+        run: |
+          python - <<'PY'
+          import subprocess, tempfile, os, pathlib, sys
+          tmp = pathlib.Path(tempfile.mkdtemp())
+          src = tmp / "src"; src.mkdir()
+          env = {**os.environ, "GIT_AUTHOR_NAME": "ci", "GIT_AUTHOR_EMAIL": "ci@x",
+                 "GIT_COMMITTER_NAME": "ci", "GIT_COMMITTER_EMAIL": "ci@x"}
+          def git(*a, cwd=src): subprocess.run(["git", "-C", str(cwd), *a], check=True, env=env, capture_output=True)
+          git("init", "-q", "-b", "main")
+          (src / "a.c").write_text("int main(){return 0;}\n")
+          git("add", "-A"); git("commit", "-qm", "initial")
+          (src / "a.c").write_text("int main(){/*bounds*/return 0;}\n")
+          git("add", "-A"); git("commit", "-qm", "fix out-of-bounds read. CVE-2024-0001")
+
+          root = tmp / "root"; (root / "domains" / "ci").mkdir(parents=True)
+          (root / "domains" / "ci" / "repos.yml").write_text(
+              "domain: ci\ndescription: smoke\nrepos:\n  sample:\n    repo: example/sample\n")
+          env2 = {**env, "OSS_BUGFIXES_ROOT": str(root), "OSS_BUGFIXES_WORK": str(tmp / "work")}
+
+          from ossbugfix import mirror, registry
+          os.environ.update({k: env2[k] for k in ("OSS_BUGFIXES_ROOT", "OSS_BUGFIXES_WORK")})
+          repo = registry.load("ci").get("sample")
+          dest = mirror.mirror_path(repo); dest.parent.mkdir(parents=True, exist_ok=True)
+          subprocess.run(["git", "clone", "--bare", "-q", str(src), str(dest)], check=True)
+
+          for stage in ("walk", "signals", "diffs", "classify"):
+              rc = subprocess.run([sys.executable, "-m", "ossbugfix.cli", stage,
+                                   "--domain", "ci"] + (["--engine", "heuristic"] if stage == "classify" else []),
+                                  env=env2).returncode
+              assert rc == 0, f"{stage} exited {rc}"
+
+          import pandas as pd
+          df = pd.read_csv(root / "domains" / "ci" / "data" / "bugfixes.csv")
+          assert len(df) == 2, df
+          fix = df[df.subject.str.startswith("fix out-of-bounds")].iloc[0]
+          assert fix.advisory_ids == "CVE-2024-0001", fix.advisory_ids
+          assert fix.is_security_fix == True, fix.is_security_fix
+          print("smoke ok:", len(df), "rows")
+          PY

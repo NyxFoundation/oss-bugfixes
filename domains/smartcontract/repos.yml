@@ -1,0 +1,243 @@
+# domains/smartcontract/repos.yml — on-chain application code.
+#
+# Scope rule: a repository belongs here when its code is DEPLOYED to a chain
+# and a defect in it puts value held by that deployment at risk. Node software
+# belongs in domains/blockchain; key custody belongs in domains/wallet.
+#
+# Two kinds of entry, deliberately mixed:
+#   * the widely-forked LIBRARIES (OpenZeppelin, Solady, Solmate). A defect in
+#     one of these is a defect in every protocol that inherited it, which is
+#     what makes their fix history disproportionately valuable.
+#   * the large protocol DEPLOYMENTS. These carry the fixes that happened after
+#     an audit, which is exactly the population an audit tool should be scored
+#     against.
+#
+# This domain also holds the audit-findings corpus in data/, which is a
+# different kind of evidence: an expert's written judgement rather than a
+# commit. The two are kept side by side on purpose — a finding says what an
+# auditor caught, a commit says what shipped.
+
+domain: smartcontract
+description: >-
+  Deployed on-chain application code and the contract libraries it inherits
+  from, where a defect puts value held by the deployment at risk.
+
+defaults:
+  forge: github.com
+
+repos:
+  # ---- contract libraries (a defect here is inherited by thousands) -------
+  openzeppelin-contracts:
+    repo: OpenZeppelin/openzeppelin-contracts
+    category: library
+    tier: 1
+    language: solidity
+  openzeppelin-upgrades:
+    repo: OpenZeppelin/openzeppelin-contracts-upgradeable
+    category: library
+    tier: 1
+    language: solidity
+  solady:
+    repo: Vectorized/solady
+    category: library
+    tier: 1
+    language: solidity
+  solmate:
+    repo: transmissions11/solmate
+    category: library
+    tier: 2
+    language: solidity
+  prb-math:
+    repo: PaulRBerg/prb-math
+    category: library
+    tier: 2
+    language: solidity
+  permit2:
+    repo: Uniswap/permit2
+    category: library
+    tier: 1
+    language: solidity
+  create2-factory:
+    repo: Arachnid/deterministic-deployment-proxy
+    category: library
+    tier: 3
+    language: solidity
+
+  # ---- DEX / AMM ----------------------------------------------------------
+  uniswap-v4-core:
+    repo: Uniswap/v4-core
+    category: dex
+    tier: 1
+    language: solidity
+  uniswap-v3-core:
+    repo: Uniswap/v3-core
+    category: dex
+    tier: 1
+    language: solidity
+  uniswap-v2-core:
+    repo: Uniswap/v2-core
+    category: dex
+    tier: 2
+    language: solidity
+  balancer-v3:
+    repo: balancer/balancer-v3-monorepo
+    category: dex
+    tier: 2
+    language: solidity
+  curve-contracts:
+    repo: curvefi/curve-contract
+    category: dex
+    tier: 2
+    language: vyper
+  pancakeswap:
+    repo: pancakeswap/pancake-smart-contracts
+    category: dex
+    tier: 3
+    language: solidity
+  cowswap:
+    repo: cowprotocol/contracts
+    category: dex
+    tier: 2
+    language: solidity
+  0x-protocol:
+    repo: 0xProject/protocol
+    category: dex
+    tier: 3
+    language: solidity
+
+  # ---- lending / CDP ------------------------------------------------------
+  aave-v3:
+    repo: aave-dao/aave-v3-origin
+    category: lending
+    tier: 1
+    language: solidity
+  compound-v3:
+    repo: compound-finance/comet
+    category: lending
+    tier: 1
+    language: solidity
+  morpho-blue:
+    repo: morpho-org/morpho-blue
+    category: lending
+    tier: 1
+    language: solidity
+  maker-core:
+    repo: makerdao/dss
+    category: lending
+    tier: 2
+    language: solidity
+  spark-psm:
+    repo: marsfoundation/spark-psm
+    category: lending
+    tier: 3
+    language: solidity
+  euler-v2:
+    repo: euler-xyz/euler-vault-kit
+    category: lending
+    tier: 2
+    language: solidity
+
+  # ---- liquid staking / restaking ----------------------------------------
+  lido-core:
+    repo: lidofinance/core
+    category: staking
+    tier: 1
+    language: solidity
+  rocketpool:
+    repo: rocket-pool/rocketpool
+    category: staking
+    tier: 2
+    language: solidity
+  eigenlayer:
+    repo: Layr-Labs/eigenlayer-contracts
+    category: staking
+    tier: 1
+    language: solidity
+  etherfi:
+    repo: etherfi-protocol/smart-contracts
+    category: staking
+    tier: 3
+    language: solidity
+
+  # ---- account abstraction / multisig ------------------------------------
+  eth-infinitism-aa:
+    repo: eth-infinitism/account-abstraction
+    category: account
+    tier: 1
+    language: solidity
+  safe-contracts:
+    repo: safe-global/safe-smart-account
+    category: account
+    tier: 1
+    language: solidity
+  seaport:
+    repo: ProjectOpenSea/seaport
+    category: marketplace
+    tier: 2
+    language: solidity
+
+  # ---- bridges (historically the largest losses in the space) ------------
+  across:
+    repo: across-protocol/contracts
+    category: bridge
+    tier: 2
+    language: solidity
+  connext:
+    repo: connext/monorepo
+    category: bridge
+    tier: 3
+    language: solidity
+  layerzero-v2:
+    repo: LayerZero-Labs/LayerZero-v2
+    category: bridge
+    tier: 2
+    language: solidity
+  wormhole:
+    repo: wormhole-foundation/wormhole
+    category: bridge
+    tier: 1
+    language: solidity
+  hop-contracts:
+    repo: hop-protocol/contracts
+    category: bridge
+    tier: 3
+    language: solidity
+
+  # ---- oracles / infra ----------------------------------------------------
+  chainlink:
+    repo: smartcontractkit/chainlink
+    category: oracle
+    tier: 1
+    language: go
+  pyth-crosschain:
+    repo: pyth-network/pyth-crosschain
+    category: oracle
+    tier: 2
+    language: rust
+  uma-protocol:
+    repo: UMAprotocol/protocol
+    category: oracle
+    tier: 3
+    language: solidity
+
+  # ---- non-EVM contract platforms ----------------------------------------
+  solana-program-library:
+    repo: solana-labs/solana-program-library
+    category: library
+    tier: 1
+    language: rust
+  anchor:
+    repo: coral-xyz/anchor
+    category: framework
+    tier: 1
+    language: rust
+  openzeppelin-cairo:
+    repo: OpenZeppelin/cairo-contracts
+    category: library
+    tier: 3
+    language: cairo
+  aptos-framework:
+    repo: aptos-labs/aptos-framework
+    category: library
+    tier: 3
+    language: move

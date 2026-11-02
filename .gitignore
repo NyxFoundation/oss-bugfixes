@@ -1,0 +1,7 @@
+# the mirror / commit / diff caches — reproducible from domains/*/repos.yml
+work/
+*.pyc
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/

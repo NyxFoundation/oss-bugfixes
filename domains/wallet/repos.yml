@@ -1,0 +1,1338 @@
+# domains/wallet/repos.yml — the wallet registry.
+#
+# Scope rule: a repository belongs here when a defect in it can lead to loss of
+# user funds, key material, or signing authority. That is deliberately wider
+# than "a wallet app" — it covers the hardware firmware that holds the seed,
+# the smart-contract account that holds the balance, the MPC/TSS library that
+# shards the key, and the signing/transport libraries every wallet UI is built
+# on. Historically those libraries are where the severe, cross-wallet bugs
+# live: one bug in bitcoinjs-lib or noble-curves is simultaneously a bug in a
+# hundred wallets.
+#
+# Closed-source wallets are absent BY CONSTRUCTION, not by oversight — Phantom,
+# Exodus, OKX, Bitget, SafePal, Coinomi, Atomic and the exchange custodians
+# publish no commit history, so no silent fix of theirs is observable. See
+# docs/limitations.md.
+#
+# Fields beyond the framework's own (`custody`, `ecosystem`) are carried
+# through untouched and are available to this domain's analysis.
+#   custody: self (user holds the key) | hw (secure element) | mpc (sharded)
+#            | smart (contract-defined authority) | lib (holds no key itself)
+#
+# Migrated from NyxFoundation/wallet-vuln-dataset collection/wallets.py.
+
+domain: wallet
+description: >-
+  Repositories where a defect can cost a user their funds, keys or signing
+  authority: wallet applications, hardware firmware, smart accounts, MPC/TSS
+  libraries, and the signing and transport libraries wallets are built on.
+
+defaults:
+  forge: github.com
+
+repos:
+
+  # ---- browser extensions / web wallets --------------------------
+  metamask:
+    repo: MetaMask/metamask-extension
+    category: browser_extension
+    tier: 1
+    language: javascript
+    custody: self
+    ecosystem: evm
+  rabby:
+    repo: RabbyHub/Rabby
+    category: browser_extension
+    tier: 1
+    language: javascript
+    custody: self
+    ecosystem: evm
+  taho:
+    repo: tahowallet/extension
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: evm
+  enkrypt:
+    repo: enkryptcom/enKrypt
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: multi
+  myetherwallet:
+    repo: MyEtherWallet/MyEtherWallet
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: evm
+  brave-wallet:
+    repo: brave/brave-core
+    category: browser_extension
+    tier: 1
+    language: cpp
+    custody: self
+    ecosystem: multi
+  uniswap-interface:
+    repo: Uniswap/interface
+    category: browser_extension
+    tier: 1
+    language: javascript
+    custody: self
+    ecosystem: evm
+  safe-wallet:
+    repo: safe-global/safe-wallet-monorepo
+    category: browser_extension
+    tier: 1
+    language: javascript
+    custody: smart
+    ecosystem: evm
+  safe-react:
+    repo: 5afe/safe-react
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: smart
+    ecosystem: evm
+    archived: true
+  ambire-wallet:
+    repo: AmbireTech/wallet
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: smart
+    ecosystem: evm
+  argent-x:
+    repo: argentlabs/argent-x
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: smart
+    ecosystem: starknet
+  keplr:
+    repo: chainapsis/keplr-wallet
+    category: browser_extension
+    tier: 1
+    language: javascript
+    custody: self
+    ecosystem: cosmos
+  cosmostation:
+    repo: cosmostation/cosmostation-chrome-extension
+    category: browser_extension
+    tier: 3
+    language: javascript
+    custody: self
+    ecosystem: cosmos
+  station:
+    repo: stationmoney/station-extension
+    category: browser_extension
+    tier: 3
+    language: javascript
+    custody: self
+    ecosystem: cosmos
+  backpack:
+    repo: coral-xyz/backpack
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: solana
+  polkadot-extension:
+    repo: polkadot-js/extension
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: polkadot
+  talisman:
+    repo: TalismanSociety/talisman
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: polkadot
+  subwallet:
+    repo: Koniverse/SubWallet-Extension
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: polkadot
+  yoroi:
+    repo: Emurgo/yoroi-frontend
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: cardano
+  nami:
+    repo: input-output-hk/nami
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: cardano
+    archived: true
+  lace:
+    repo: input-output-hk/lace
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: cardano
+  tonkeeper-web:
+    repo: tonkeeper/tonkeeper-web
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: ton
+  near-wallet:
+    repo: near/near-wallet
+    category: browser_extension
+    tier: 3
+    language: javascript
+    custody: self
+    ecosystem: near
+  avalanche-wallet:
+    repo: ava-labs/avalanche-wallet
+    category: browser_extension
+    tier: 3
+    language: javascript
+    custody: self
+    ecosystem: evm
+  leather:
+    repo: leather-io/extension
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: stacks
+    archived: true
+  freighter:
+    repo: stellar/freighter
+    category: browser_extension
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: stellar
+
+  # ---- mobile wallets --------------------------------------------
+  metamask-mobile:
+    repo: MetaMask/metamask-mobile
+    category: mobile
+    tier: 1
+    language: javascript
+    custody: self
+    ecosystem: evm
+  rainbow:
+    repo: rainbow-me/rainbow
+    category: mobile
+    tier: 1
+    language: javascript
+    custody: self
+    ecosystem: evm
+  uniswap-wallet:
+    repo: Uniswap/wallet
+    category: mobile
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: evm
+    archived: true
+  alphawallet-android:
+    repo: AlphaWallet/alpha-wallet-android
+    category: mobile
+    tier: 2
+    language: java
+    custody: self
+    ecosystem: evm
+  alphawallet-ios:
+    repo: AlphaWallet/alpha-wallet-ios
+    category: mobile
+    tier: 2
+    language: swift
+    custody: self
+    ecosystem: evm
+  edge:
+    repo: EdgeApp/edge-react-gui
+    category: mobile
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: multi
+  status-go:
+    repo: status-im/status-go
+    category: mobile
+    tier: 2
+    language: go
+    custody: self
+    ecosystem: evm
+  status-mobile:
+    repo: status-im/status-legacy
+    category: mobile
+    tier: 3
+    language: clojure
+    custody: self
+    ecosystem: evm
+    archived: true
+  bluewallet:
+    repo: BlueWallet/BlueWallet
+    category: mobile
+    tier: 1
+    language: javascript
+    custody: self
+    ecosystem: bitcoin
+  bitpay-wallet:
+    repo: bitpay/wallet
+    category: mobile
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: bitcoin
+  muun-apollo:
+    repo: muun/apollo
+    category: mobile
+    tier: 2
+    language: kotlin
+    custody: self
+    ecosystem: bitcoin
+  muun-falcon:
+    repo: muun/falcon
+    category: mobile
+    tier: 2
+    language: swift
+    custody: self
+    ecosystem: bitcoin
+  samourai:
+    repo: Samourai-Wallet/samourai-wallet-android
+    category: mobile
+    tier: 2
+    language: java
+    custody: self
+    ecosystem: bitcoin
+  nunchuk:
+    repo: nunchuk-io/nunchuk-android
+    category: mobile
+    tier: 3
+    language: kotlin
+    custody: self
+    ecosystem: bitcoin
+  stack-wallet:
+    repo: cypherstack/stack_wallet
+    category: mobile
+    tier: 3
+    language: dart
+    custody: self
+    ecosystem: multi
+  cake-wallet:
+    repo: cake-tech/cake_wallet
+    category: mobile
+    tier: 2
+    language: dart
+    custody: self
+    ecosystem: monero
+  phoenix:
+    repo: ACINQ/phoenix
+    category: mobile
+    tier: 2
+    language: kotlin
+    custody: self
+    ecosystem: lightning
+  breez:
+    repo: breez/breezmobile
+    category: mobile
+    tier: 2
+    language: dart
+    custody: self
+    ecosystem: lightning
+  zeus:
+    repo: ZeusLN/zeus
+    category: mobile
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: lightning
+  onekey-app:
+    repo: OneKeyHQ/app-monorepo
+    category: mobile
+    tier: 1
+    language: javascript
+    custody: hw
+    ecosystem: multi
+  tangem:
+    repo: tangem/tangem-app-ios
+    category: mobile
+    tier: 2
+    language: swift
+    custody: hw
+    ecosystem: multi
+  tonkeeper-ios:
+    repo: tonkeeper/ios
+    category: mobile
+    tier: 2
+    language: swift
+    custody: self
+    ecosystem: ton
+  core-mobile:
+    repo: ava-labs/core-mobile
+    category: mobile
+    tier: 3
+    language: javascript
+    custody: self
+    ecosystem: evm
+  pera:
+    repo: perawallet/pera-wallet
+    category: mobile
+    tier: 2
+    language: swift
+    custody: self
+    ecosystem: algorand
+    archived: true
+
+  # ---- desktop wallets -------------------------------------------
+  rabby-desktop:
+    repo: RabbyHub/RabbyDesktop
+    category: desktop
+    tier: 3
+    language: javascript
+    custody: self
+    ecosystem: evm
+  mycrypto:
+    repo: MyCryptoHQ/MyCrypto
+    category: desktop
+    tier: 3
+    language: javascript
+    custody: self
+    ecosystem: evm
+  frame:
+    repo: floating/frame
+    category: desktop
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: evm
+  status-desktop:
+    repo: status-im/status-app
+    category: desktop
+    tier: 2
+    language: qml
+    custody: self
+    ecosystem: evm
+  electrum:
+    repo: spesmilo/electrum
+    category: desktop
+    tier: 1
+    language: python
+    custody: self
+    ecosystem: bitcoin
+  sparrow:
+    repo: sparrowwallet/sparrow
+    category: desktop
+    tier: 1
+    language: java
+    custody: self
+    ecosystem: bitcoin
+  wasabi:
+    repo: WalletWasabi/WalletWasabi
+    category: desktop
+    tier: 1
+    language: csharp
+    custody: self
+    ecosystem: bitcoin
+  green-qt:
+    repo: Blockstream/green_qt
+    category: desktop
+    tier: 2
+    language: cpp
+    custody: self
+    ecosystem: bitcoin
+  specter:
+    repo: cryptoadvance/specter-desktop
+    category: desktop
+    tier: 2
+    language: python
+    custody: self
+    ecosystem: bitcoin
+  liana:
+    repo: wizardsardine/liana
+    category: desktop
+    tier: 3
+    language: rust
+    custody: self
+    ecosystem: bitcoin
+  bisq:
+    repo: bisq-network/bisq
+    category: desktop
+    tier: 2
+    language: java
+    custody: self
+    ecosystem: bitcoin
+  monero-gui:
+    repo: monero-project/monero-gui
+    category: desktop
+    tier: 2
+    language: cpp
+    custody: self
+    ecosystem: monero
+  feather:
+    repo: feather-wallet/feather
+    category: desktop
+    tier: 3
+    language: cpp
+    custody: self
+    ecosystem: monero
+  trezor-suite:
+    repo: trezor/trezor-suite
+    category: desktop
+    tier: 1
+    language: javascript
+    custody: hw
+    ecosystem: multi
+  ledger-live:
+    repo: LedgerHQ/ledger-live
+    category: desktop
+    tier: 1
+    language: javascript
+    custody: hw
+    ecosystem: multi
+  bitbox-app:
+    repo: BitBoxSwiss/bitbox-wallet-app
+    category: desktop
+    tier: 2
+    language: go
+    custody: hw
+    ecosystem: multi
+  daedalus:
+    repo: input-output-hk/daedalus
+    category: desktop
+    tier: 2
+    language: javascript
+    custody: self
+    ecosystem: cardano
+
+  # ---- hardware wallet firmware ----------------------------------
+  trezor-firmware:
+    repo: trezor/trezor-firmware
+    category: hardware_firmware
+    tier: 1
+    language: c
+    custody: hw
+    ecosystem: multi
+  ledger-app-eth:
+    repo: LedgerHQ/app-ethereum
+    category: hardware_firmware
+    tier: 1
+    language: c
+    custody: hw
+    ecosystem: evm
+  ledger-app-btc:
+    repo: LedgerHQ/app-bitcoin
+    category: hardware_firmware
+    tier: 2
+    language: c
+    custody: hw
+    ecosystem: bitcoin
+  ledger-sdk:
+    repo: LedgerHQ/ledger-secure-sdk
+    category: hardware_firmware
+    tier: 2
+    language: c
+    custody: hw
+    ecosystem: multi
+  keystone3:
+    repo: KeystoneHQ/keystone3-firmware
+    category: hardware_firmware
+    tier: 2
+    language: c
+    custody: hw
+    ecosystem: multi
+  coldcard:
+    repo: Coldcard/firmware
+    category: hardware_firmware
+    tier: 2
+    language: python
+    custody: hw
+    ecosystem: bitcoin
+  bitbox02:
+    repo: BitBoxSwiss/bitbox02-firmware
+    category: hardware_firmware
+    tier: 2
+    language: c
+    custody: hw
+    ecosystem: multi
+  onekey-firmware:
+    repo: OneKeyHQ/firmware
+    category: hardware_firmware
+    tier: 2
+    language: c
+    custody: hw
+    ecosystem: multi
+  jade:
+    repo: Blockstream/Jade
+    category: hardware_firmware
+    tier: 2
+    language: c
+    custody: hw
+    ecosystem: bitcoin
+  passport:
+    repo: Foundation-Devices/passport2
+    category: hardware_firmware
+    tier: 3
+    language: c
+    custody: hw
+    ecosystem: bitcoin
+
+  # ---- smart accounts / account abstraction ----------------------
+  safe-contracts:
+    repo: safe-fndn/safe-smart-account
+    category: smart_account
+    tier: 1
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  safe-modules:
+    repo: safe-fndn/safe-modules
+    category: smart_account
+    tier: 2
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  account-abstraction:
+    repo: eth-infinitism/account-abstraction
+    category: smart_account
+    tier: 1
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  alchemy-modular:
+    repo: alchemyplatform/modular-account
+    category: smart_account
+    tier: 2
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  alchemy-light:
+    repo: alchemyplatform/light-account
+    category: smart_account
+    tier: 2
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  zerodev-kernel:
+    repo: zerodevapp/kernel
+    category: smart_account
+    tier: 2
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  soul-wallet:
+    repo: Elytro-eth/soul-wallet-contract
+    category: smart_account
+    tier: 3
+    language: solidity
+    custody: smart
+    ecosystem: evm
+    archived: true
+  biconomy-scw:
+    repo: bcnmy/scw-contracts
+    category: smart_account
+    tier: 2
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  etherspot:
+    repo: etherspot/etherspot-prime-contracts
+    category: smart_account
+    tier: 3
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  sequence-contracts:
+    repo: 0xsequence/wallet-contracts
+    category: smart_account
+    tier: 2
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  argent-contracts:
+    repo: argentlabs/argent-contracts-starknet
+    category: smart_account
+    tier: 2
+    language: cairo
+    custody: smart
+    ecosystem: starknet
+  rhinestone:
+    repo: rhinestonewtf/modulekit
+    category: smart_account
+    tier: 3
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  openfort-contracts:
+    repo: openfort-xyz/openfort-contracts
+    category: smart_account
+    tier: 3
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  thirdweb-contracts:
+    repo: thirdweb-dev/contracts
+    category: smart_account
+    tier: 2
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  coinbase-smart-wallet:
+    repo: coinbase/smart-wallet
+    category: smart_account
+    tier: 1
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  webauthn-sol:
+    repo: base/webauthn-sol
+    category: smart_account
+    tier: 1
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  p256-verifier:
+    repo: daimo-eth/p256-verifier
+    category: smart_account
+    tier: 1
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  clave:
+    repo: getclave/clave-contracts
+    category: smart_account
+    tier: 2
+    language: javascript
+    custody: smart
+    ecosystem: evm
+  passkeys-4337:
+    repo: passkeys-4337/smart-wallet
+    category: smart_account
+    tier: 3
+    language: javascript
+    custody: smart
+    ecosystem: evm
+    archived: true
+  webauthn-owner-plugin:
+    repo: exactly/webauthn-owner-plugin
+    category: smart_account
+    tier: 3
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  kernel-7579:
+    repo: zerodevapp/kernel-7579-plugins
+    category: smart_account
+    tier: 3
+    language: solidity
+    custody: smart
+    ecosystem: evm
+  ton-wallet-contract:
+    repo: ton-blockchain/wallet-contract
+    category: smart_account
+    tier: 2
+    language: javascript
+    custody: smart
+    ecosystem: ton
+
+  # ---- MPC and threshold-signature libraries ---------------------
+  zengo-mpecdsa:
+    repo: ZenGo-X/multi-party-ecdsa
+    category: mpc_tss
+    tier: 2
+    language: rust
+    custody: mpc
+    ecosystem: multi
+  gotham-city:
+    repo: ZenGo-X/gotham-city
+    category: mpc_tss
+    tier: 3
+    language: rust
+    custody: mpc
+    ecosystem: bitcoin
+  bnb-tss-lib:
+    repo: bnb-chain/tss-lib
+    category: mpc_tss
+    tier: 1
+    language: go
+    custody: mpc
+    ecosystem: multi
+  fireblocks-mpc:
+    repo: fireblocks/mpc-lib
+    category: mpc_tss
+    tier: 2
+    language: cpp
+    custody: mpc
+    ecosystem: multi
+  kryptology:
+    repo: coinbase/kryptology
+    category: mpc_tss
+    tier: 2
+    language: go
+    custody: mpc
+    ecosystem: multi
+    archived: true
+  taurus-mp-sig:
+    repo: taurushq-io/multi-party-sig
+    category: mpc_tss
+    tier: 3
+    language: go
+    custody: mpc
+    ecosystem: multi
+  web3auth:
+    repo: Web3Auth/web3auth-web
+    category: mpc_tss
+    tier: 2
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+  tkey:
+    repo: MetaMask/tkey
+    category: mpc_tss
+    tier: 2
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+  torus:
+    repo: torusresearch/torus-website
+    category: mpc_tss
+    tier: 3
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+  turnkey:
+    repo: tkhq/sdk
+    category: mpc_tss
+    tier: 3
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+  bitgo:
+    repo: BitGo/BitGoJS
+    category: mpc_tss
+    tier: 2
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+  privy-sss:
+    repo: privy-io/shamir-secret-sharing
+    category: mpc_tss
+    tier: 1
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+  openfort-signer:
+    repo: openfort-xyz/opensigner
+    category: mpc_tss
+    tier: 2
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+  openfort-sss:
+    repo: openfort-xyz/shamir-secret-sharing-go
+    category: mpc_tss
+    tier: 3
+    language: go
+    custody: mpc
+    ecosystem: multi
+  particle-auth:
+    repo: Particle-Network/particle-web-auth-core
+    category: mpc_tss
+    tier: 3
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+  para-mpc:
+    repo: getpara/mpc-export
+    category: mpc_tss
+    tier: 3
+    language: go
+    custody: mpc
+    ecosystem: multi
+  web3auth-mpc:
+    repo: Web3Auth/mpc-core-kit
+    category: mpc_tss
+    tier: 2
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+  lit-peer:
+    repo: LIT-Protocol/lit-peer
+    category: mpc_tss
+    tier: 3
+    language: rust
+    custody: mpc
+    ecosystem: multi
+  dfns-sdk:
+    repo: dfns/dfns-sdk-ts
+    category: mpc_tss
+    tier: 3
+    language: javascript
+    custody: mpc
+    ecosystem: multi
+
+  # ---- wallet SDKs and signing / transport libraries -------------
+  metamask-core:
+    repo: MetaMask/core
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  metamask-snaps:
+    repo: MetaMask/snaps
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  metamask-sdk:
+    repo: MetaMask/metamask-sdk
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  eth-sig-util:
+    repo: MetaMask/eth-sig-util
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  eth-hd-keyring:
+    repo: MetaMask/eth-hd-keyring
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: evm
+    archived: true
+  keyring-controller:
+    repo: MetaMask/KeyringController
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: evm
+    archived: true
+  key-tree:
+    repo: MetaMask/key-tree
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  trust-provider:
+    repo: trustwallet/trust-web3-provider
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  wallet-core:
+    repo: trustwallet/wallet-core
+    category: wallet_sdk
+    tier: 1
+    language: cpp
+    custody: lib
+    ecosystem: multi
+  coinbase-sdk:
+    repo: coinbase/coinbase-wallet-sdk
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  coinbase-mobile-sdk:
+    repo: coinbase/wallet-mobile-sdk
+    category: wallet_sdk
+    tier: 3
+    language: kotlin
+    custody: lib
+    ecosystem: evm
+  imtoken-tokencore:
+    repo: consenlabs/token-core
+    category: wallet_sdk
+    tier: 2
+    language: rust
+    custody: lib
+    ecosystem: multi
+    archived: true
+  imtoken-tokencore2:
+    repo: consenlabs/token-core-monorepo
+    category: wallet_sdk
+    tier: 2
+    language: c
+    custody: lib
+    ecosystem: multi
+  bitcoinjs-lib:
+    repo: bitcoinjs/bitcoinjs-lib
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: bitcoin
+  bitcore:
+    repo: bitpay/bitcore
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: bitcoin
+  blockchain-wallet:
+    repo: blockchain/My-Wallet-V3
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: bitcoin
+    archived: true
+  gdk:
+    repo: Blockstream/gdk
+    category: wallet_sdk
+    tier: 2
+    language: cpp
+    custody: lib
+    ecosystem: bitcoin
+  hwi:
+    repo: bitcoin-core/HWI
+    category: wallet_sdk
+    tier: 2
+    language: python
+    custody: lib
+    ecosystem: bitcoin
+  librustzcash:
+    repo: zcash/librustzcash
+    category: wallet_sdk
+    tier: 2
+    language: rust
+    custody: lib
+    ecosystem: zcash
+  trezor-connect:
+    repo: trezor/connect
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: multi
+    archived: true
+  ledgerjs:
+    repo: LedgerHQ/ledgerjs
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: multi
+    archived: true
+  onekey-hw-sdk:
+    repo: OneKeyHQ/hardware-js-sdk
+    category: wallet_sdk
+    tier: 3
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  gridplus:
+    repo: GridPlus/lattice-connect-v2
+    category: wallet_sdk
+    tier: 3
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  coolwallet:
+    repo: CoolBitX-Technology/coolwallet-sdk
+    category: wallet_sdk
+    tier: 3
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  safe-sdk:
+    repo: safe-global/safe-core-sdk
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  sequence-js:
+    repo: 0xsequence/sequence.js
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  ambire-common:
+    repo: AmbireTech/ambire-common
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  magic:
+    repo: magiclabs/magic-js
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  openfort-js:
+    repo: openfort-xyz/openfort-js
+    category: wallet_sdk
+    tier: 3
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  thirdweb-js:
+    repo: thirdweb-dev/js
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  passkey-kit:
+    repo: kalepail/passkey-kit
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: smart
+    ecosystem: stellar
+  simplewebauthn:
+    repo: MasterKale/SimpleWebAuthn
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  go-webauthn:
+    repo: go-webauthn/webauthn
+    category: wallet_sdk
+    tier: 2
+    language: go
+    custody: lib
+    ecosystem: multi
+  webauthn4j:
+    repo: webauthn4j/webauthn4j
+    category: wallet_sdk
+    tier: 3
+    language: java
+    custody: lib
+    ecosystem: multi
+  duo-webauthn:
+    repo: duo-labs/webauthn
+    category: wallet_sdk
+    tier: 3
+    language: go
+    custody: lib
+    ecosystem: multi
+    archived: true
+  ethers:
+    repo: ethers-io/ethers.js
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  web3js:
+    repo: web3/web3.js
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+    archived: true
+  viem:
+    repo: wevm/viem
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  wagmi:
+    repo: wevm/wagmi
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  ethereumjs:
+    repo: ethereumjs/ethereumjs-monorepo
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  web3py:
+    repo: ApeWorX/web3.py
+    category: wallet_sdk
+    tier: 2
+    language: python
+    custody: lib
+    ecosystem: evm
+  web3j:
+    repo: LFDT-web3j/web3j
+    category: wallet_sdk
+    tier: 2
+    language: java
+    custody: lib
+    ecosystem: evm
+  noble-curves:
+    repo: paulmillr/noble-curves
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  scure-bip39:
+    repo: paulmillr/scure-bip39
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  bip39-tool:
+    repo: iancoleman/bip39
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  cosmjs:
+    repo: cosmos/cosmjs
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: cosmos
+  solana-web3js:
+    repo: solana-foundation/solana-web3.js
+    category: wallet_sdk
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: solana
+  solana-kit:
+    repo: anza-xyz/kit
+    category: wallet_sdk
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: solana
+  tron-wallet-cli:
+    repo: tronprotocol/wallet-cli
+    category: wallet_sdk
+    tier: 2
+    language: java
+    custody: lib
+    ecosystem: tron
+  zerion-sdk:
+    repo: zeriontech/defi-sdk
+    category: wallet_sdk
+    tier: 3
+    language: javascript
+    custody: lib
+    ecosystem: evm
+
+  # ---- full-node wallets -----------------------------------------
+  bitcoin-core:
+    repo: bitcoin/bitcoin
+    category: node_wallet
+    tier: 1
+    language: cpp
+    custody: self
+    ecosystem: bitcoin
+  btcpay:
+    repo: btcpayserver/btcpayserver
+    category: node_wallet
+    tier: 2
+    language: csharp
+    custody: self
+    ecosystem: bitcoin
+  eclair:
+    repo: ACINQ/eclair
+    category: node_wallet
+    tier: 2
+    language: scala
+    custody: self
+    ecosystem: lightning
+  monero:
+    repo: monero-project/monero
+    category: node_wallet
+    tier: 1
+    language: cpp
+    custody: self
+    ecosystem: monero
+  zcash:
+    repo: zcash/zcash
+    category: node_wallet
+    tier: 2
+    language: cpp
+    custody: self
+    ecosystem: zcash
+    archived: true
+  sui:
+    repo: MystenLabs/sui
+    category: node_wallet
+    tier: 2
+    language: rust
+    custody: self
+    ecosystem: sui
+  aptos:
+    repo: aptos-labs/aptos-core
+    category: node_wallet
+    tier: 2
+    language: rust
+    custody: self
+    ecosystem: aptos
+
+  # ---- supporting infrastructure ---------------------------------
+  eth-phishing-detect:
+    repo: MetaMask/eth-phishing-detect
+    category: infra
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  walletconnect:
+    repo: WalletConnect/walletconnect-monorepo
+    category: infra
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  reown-appkit:
+    repo: reown-com/appkit
+    category: infra
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: multi
+  rainbowkit:
+    repo: rainbow-me/rainbowkit
+    category: infra
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: evm
+  web3-react:
+    repo: Uniswap/web3-react
+    category: infra
+    tier: 2
+    language: javascript
+    custody: lib
+    ecosystem: evm
+    archived: true
+  solana-wallet-adapter:
+    repo: anza-xyz/wallet-adapter
+    category: infra
+    tier: 1
+    language: javascript
+    custody: lib
+    ecosystem: solana
+

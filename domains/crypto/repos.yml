@@ -1,0 +1,286 @@
+# domains/crypto/repos.yml — cryptographic implementations.
+#
+# Scope rule: a repository belongs here when it implements a cryptographic
+# primitive or protocol, and a defect in it breaks a security guarantee rather
+# than merely crashing. This is the domain where the most valuable bug fixes
+# are the quietest: a constant-time regression, a missing subgroup check, a
+# nonce derived from the wrong input. None of those read as security fixes in
+# a commit message, which is the entire argument for walking whole histories
+# instead of grepping for "security".
+#
+# Extra field carried for this domain:
+#   primitive  tls | hash | signature | curve | aead | pq | zk | mpc | rng
+
+domain: crypto
+description: >-
+  Cryptographic libraries and protocol implementations, where a defect breaks a
+  security guarantee rather than merely crashing — the domain where silent
+  fixes are the norm rather than the exception.
+
+defaults:
+  forge: github.com
+
+repos:
+  # ---- TLS / general-purpose toolkits -------------------------------------
+  openssl:
+    repo: openssl/openssl
+    category: toolkit
+    tier: 1
+    language: c
+    primitive: tls
+  boringssl:
+    repo: google/boringssl
+    category: toolkit
+    tier: 1
+    language: c
+    primitive: tls
+  libressl:
+    repo: libressl/portable
+    category: toolkit
+    tier: 2
+    language: c
+    primitive: tls
+  mbedtls:
+    repo: Mbed-TLS/mbedtls
+    category: toolkit
+    tier: 1
+    language: c
+    primitive: tls
+  wolfssl:
+    repo: wolfSSL/wolfssl
+    category: toolkit
+    tier: 2
+    language: c
+    primitive: tls
+  gnutls:
+    repo: gnutls/gnutls
+    category: toolkit
+    tier: 2
+    language: c
+    primitive: tls
+  rustls:
+    repo: rustls/rustls
+    category: toolkit
+    tier: 1
+    language: rust
+    primitive: tls
+  s2n-tls:
+    repo: aws/s2n-tls
+    category: toolkit
+    tier: 2
+    language: c
+    primitive: tls
+  bouncycastle:
+    repo: bcgit/bc-java
+    category: toolkit
+    tier: 2
+    language: java
+    primitive: tls
+
+  # ---- primitive libraries ------------------------------------------------
+  libsodium:
+    repo: jedisct1/libsodium
+    category: library
+    tier: 1
+    language: c
+    primitive: aead
+  nacl-rust:
+    repo: RustCrypto/traits
+    category: library
+    tier: 2
+    language: rust
+    primitive: hash
+  rustcrypto-hashes:
+    repo: RustCrypto/hashes
+    category: library
+    tier: 1
+    language: rust
+    primitive: hash
+  rustcrypto-elliptic:
+    repo: RustCrypto/elliptic-curves
+    category: library
+    tier: 1
+    language: rust
+    primitive: curve
+  rustcrypto-aead:
+    repo: RustCrypto/AEADs
+    category: library
+    tier: 2
+    language: rust
+    primitive: aead
+  noble-curves:
+    repo: paulmillr/noble-curves
+    category: library
+    tier: 1
+    language: typescript
+    primitive: curve
+  noble-hashes:
+    repo: paulmillr/noble-hashes
+    category: library
+    tier: 1
+    language: typescript
+    primitive: hash
+  libsecp256k1:
+    repo: bitcoin-core/secp256k1
+    category: library
+    tier: 1
+    language: c
+    primitive: curve
+  blst:
+    repo: supranational/blst
+    category: library
+    tier: 1
+    language: c
+    primitive: signature
+  libgcrypt:
+    repo: gpg/libgcrypt
+    category: library
+    tier: 2
+    language: c
+    primitive: hash
+  nettle:
+    repo: gnutls/nettle
+    category: library
+    tier: 3
+    language: c
+    primitive: hash
+  cryptography-py:
+    repo: pyca/cryptography
+    category: library
+    tier: 1
+    language: python
+    primitive: tls
+  golang-crypto:
+    repo: golang/crypto
+    category: library
+    tier: 1
+    language: go
+    primitive: hash
+  tink:
+    repo: tink-crypto/tink
+    category: library
+    tier: 2
+    language: java
+    primitive: aead
+
+  # ---- post-quantum -------------------------------------------------------
+  liboqs:
+    repo: open-quantum-safe/liboqs
+    category: library
+    tier: 1
+    language: c
+    primitive: pq
+  pqclean:
+    repo: PQClean/PQClean
+    category: library
+    tier: 1
+    language: c
+    primitive: pq
+  kyber-ref:
+    repo: pq-crystals/kyber
+    category: reference
+    tier: 2
+    language: c
+    primitive: pq
+  dilithium-ref:
+    repo: pq-crystals/dilithium
+    category: reference
+    tier: 2
+    language: c
+    primitive: pq
+  sphincsplus:
+    repo: sphincs/sphincsplus
+    category: reference
+    tier: 3
+    language: c
+    primitive: pq
+  falcon-rs:
+    repo: aldenml/ecc
+    category: library
+    tier: 3
+    language: c
+    primitive: pq
+
+  # ---- zero-knowledge -----------------------------------------------------
+  arkworks-algebra:
+    repo: arkworks-rs/algebra
+    category: library
+    tier: 1
+    language: rust
+    primitive: zk
+  halo2:
+    repo: zcash/halo2
+    category: library
+    tier: 1
+    language: rust
+    primitive: zk
+  circom:
+    repo: iden3/circom
+    category: compiler
+    tier: 1
+    language: rust
+    primitive: zk
+  circomlib:
+    repo: iden3/circomlib
+    category: library
+    tier: 1
+    language: circom
+    primitive: zk
+  snarkjs:
+    repo: iden3/snarkjs
+    category: library
+    tier: 2
+    language: javascript
+    primitive: zk
+  gnark:
+    repo: Consensys/gnark
+    category: library
+    tier: 1
+    language: go
+    primitive: zk
+  plonky3:
+    repo: Plonky3/Plonky3
+    category: library
+    tier: 2
+    language: rust
+    primitive: zk
+  risc0:
+    repo: risc0/risc0
+    category: zkvm
+    tier: 2
+    language: rust
+    primitive: zk
+  sp1:
+    repo: succinctlabs/sp1
+    category: zkvm
+    tier: 2
+    language: rust
+    primitive: zk
+
+  # ---- MPC / threshold ----------------------------------------------------
+  mp-spdz:
+    repo: data61/MP-SPDZ
+    category: framework
+    tier: 3
+    language: cpp
+    primitive: mpc
+  tss-lib:
+    repo: bnb-chain/tss-lib
+    category: library
+    tier: 2
+    language: go
+    primitive: mpc
+
+  # ---- randomness / key derivation ---------------------------------------
+  getrandom:
+    repo: rust-random/getrandom
+    category: library
+    tier: 2
+    language: rust
+    primitive: rng
+  argon2:
+    repo: P-H-C/phc-winner-argon2
+    category: library
+    tier: 2
+    language: c
+    primitive: hash

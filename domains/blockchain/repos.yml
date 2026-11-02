@@ -1,0 +1,371 @@
+# domains/blockchain/repos.yml — consensus-critical node software.
+#
+# Scope rule: a repository belongs here when a defect in it can halt a chain,
+# split it, or let an invalid state be accepted as valid. That is the node's
+# own threat model — not the application's — so smart contracts deployed ON a
+# chain belong in domains/smartcontract, and key-custody software belongs in
+# domains/wallet.
+#
+# The eleven Ethereum clients (five execution-layer, six consensus-layer) are
+# tier 1 and were migrated from NyxFoundation/ethereum-vuln-dataset. They are
+# the most interesting rows in this domain for a specific reason: the same
+# specification is implemented eleven times, so a defect in one is a natural
+# experiment about whether the other ten got it right.
+#
+# Extra fields carried for this domain:
+#   layer      execution | consensus | full | infra
+#   ecosystem  the chain family the software serves
+
+domain: blockchain
+description: >-
+  Node implementations and consensus-critical infrastructure, where a defect
+  can halt a chain, split it, or admit an invalid state transition.
+
+defaults:
+  forge: github.com
+
+repos:
+  # ---- Ethereum execution layer ------------------------------------------
+  geth:
+    repo: ethereum/go-ethereum
+    category: client
+    tier: 1
+    language: go
+    layer: execution
+    ecosystem: ethereum
+  nethermind:
+    repo: NethermindEth/nethermind
+    category: client
+    tier: 1
+    language: csharp
+    layer: execution
+    ecosystem: ethereum
+  besu:
+    repo: hyperledger/besu
+    category: client
+    tier: 1
+    language: java
+    layer: execution
+    ecosystem: ethereum
+  erigon:
+    repo: erigontech/erigon
+    category: client
+    tier: 1
+    language: go
+    layer: execution
+    ecosystem: ethereum
+  reth:
+    repo: paradigmxyz/reth
+    category: client
+    tier: 1
+    language: rust
+    layer: execution
+    ecosystem: ethereum
+
+  # ---- Ethereum consensus layer ------------------------------------------
+  lighthouse:
+    repo: sigp/lighthouse
+    category: client
+    tier: 1
+    language: rust
+    layer: consensus
+    ecosystem: ethereum
+  lodestar:
+    repo: ChainSafe/lodestar
+    category: client
+    tier: 1
+    language: typescript
+    layer: consensus
+    ecosystem: ethereum
+  nimbus:
+    repo: status-im/nimbus-eth2
+    category: client
+    tier: 1
+    language: nim
+    layer: consensus
+    ecosystem: ethereum
+  prysm:
+    repo: prysmaticlabs/prysm
+    category: client
+    tier: 1
+    language: go
+    layer: consensus
+    ecosystem: ethereum
+  teku:
+    repo: Consensys/teku
+    category: client
+    tier: 1
+    language: java
+    layer: consensus
+    ecosystem: ethereum
+  grandine:
+    repo: grandinetech/grandine
+    category: client
+    tier: 1
+    language: rust
+    layer: consensus
+    ecosystem: ethereum
+
+  # ---- Ethereum specifications and shared libraries ----------------------
+  # A spec change that fixes a defect is the authoritative record of that
+  # defect, and usually predates every client's fix for it.
+  consensus-specs:
+    repo: ethereum/consensus-specs
+    category: spec
+    tier: 1
+    language: python
+    layer: consensus
+    ecosystem: ethereum
+  execution-specs:
+    repo: ethereum/execution-specs
+    category: spec
+    tier: 1
+    language: python
+    layer: execution
+    ecosystem: ethereum
+  evmone:
+    repo: ethereum/evmone
+    category: library
+    tier: 2
+    language: cpp
+    layer: execution
+    ecosystem: ethereum
+  revm:
+    repo: bluealloy/revm
+    category: library
+    tier: 1
+    language: rust
+    layer: execution
+    ecosystem: ethereum
+  mev-boost:
+    repo: flashbots/mev-boost
+    category: infra
+    tier: 2
+    language: go
+    layer: infra
+    ecosystem: ethereum
+
+  # ---- Bitcoin ------------------------------------------------------------
+  bitcoin-core:
+    repo: bitcoin/bitcoin
+    category: client
+    tier: 1
+    language: cpp
+    layer: full
+    ecosystem: bitcoin
+  btcd:
+    repo: btcsuite/btcd
+    category: client
+    tier: 2
+    language: go
+    layer: full
+    ecosystem: bitcoin
+  lnd:
+    repo: lightningnetwork/lnd
+    category: client
+    tier: 1
+    language: go
+    layer: full
+    ecosystem: bitcoin
+  core-lightning:
+    repo: ElementsProject/lightning
+    category: client
+    tier: 2
+    language: c
+    layer: full
+    ecosystem: bitcoin
+  eclair:
+    repo: ACINQ/eclair
+    category: client
+    tier: 3
+    language: scala
+    layer: full
+    ecosystem: bitcoin
+  libbitcoin:
+    repo: libbitcoin/libbitcoin-system
+    category: library
+    tier: 3
+    language: cpp
+    layer: full
+    ecosystem: bitcoin
+
+  # ---- other L1s ----------------------------------------------------------
+  solana:
+    repo: anza-xyz/agave
+    category: client
+    tier: 1
+    language: rust
+    layer: full
+    ecosystem: solana
+  solana-labs:
+    repo: solana-labs/solana
+    category: client
+    tier: 2
+    language: rust
+    layer: full
+    ecosystem: solana
+    archived: true
+  firedancer:
+    repo: firedancer-io/firedancer
+    category: client
+    tier: 2
+    language: c
+    layer: full
+    ecosystem: solana
+  cosmos-sdk:
+    repo: cosmos/cosmos-sdk
+    category: framework
+    tier: 1
+    language: go
+    layer: full
+    ecosystem: cosmos
+  cometbft:
+    repo: cometbft/cometbft
+    category: client
+    tier: 1
+    language: go
+    layer: consensus
+    ecosystem: cosmos
+  ibc-go:
+    repo: cosmos/ibc-go
+    category: library
+    tier: 1
+    language: go
+    layer: full
+    ecosystem: cosmos
+  polkadot-sdk:
+    repo: paritytech/polkadot-sdk
+    category: framework
+    tier: 1
+    language: rust
+    layer: full
+    ecosystem: polkadot
+  avalanchego:
+    repo: ava-labs/avalanchego
+    category: client
+    tier: 2
+    language: go
+    layer: full
+    ecosystem: avalanche
+  near-core:
+    repo: near/nearcore
+    category: client
+    tier: 2
+    language: rust
+    layer: full
+    ecosystem: near
+  aptos-core:
+    repo: aptos-labs/aptos-core
+    category: client
+    tier: 2
+    language: rust
+    layer: full
+    ecosystem: aptos
+  sui:
+    repo: MystenLabs/sui
+    category: client
+    tier: 2
+    language: rust
+    layer: full
+    ecosystem: sui
+  tendermint:
+    repo: tendermint/tendermint
+    category: client
+    tier: 3
+    language: go
+    layer: consensus
+    ecosystem: cosmos
+    archived: true
+  monero:
+    repo: monero-project/monero
+    category: client
+    tier: 2
+    language: cpp
+    layer: full
+    ecosystem: monero
+  zcash:
+    repo: zcash/zcash
+    category: client
+    tier: 2
+    language: cpp
+    layer: full
+    ecosystem: zcash
+  cardano-node:
+    repo: IntersectMBO/cardano-node
+    category: client
+    tier: 3
+    language: haskell
+    layer: full
+    ecosystem: cardano
+  algorand:
+    repo: algorand/go-algorand
+    category: client
+    tier: 3
+    language: go
+    layer: full
+    ecosystem: algorand
+  stellar-core:
+    repo: stellar/stellar-core
+    category: client
+    tier: 3
+    language: cpp
+    layer: full
+    ecosystem: stellar
+  xrpl:
+    repo: XRPLF/rippled
+    category: client
+    tier: 2
+    language: cpp
+    layer: full
+    ecosystem: xrpl
+  ton:
+    repo: ton-blockchain/ton
+    category: client
+    tier: 3
+    language: cpp
+    layer: full
+    ecosystem: ton
+
+  # ---- L2 / rollup node software -----------------------------------------
+  op-stack:
+    repo: ethereum-optimism/optimism
+    category: client
+    tier: 1
+    language: go
+    layer: execution
+    ecosystem: optimism
+  arbitrum-nitro:
+    repo: OffchainLabs/nitro
+    category: client
+    tier: 1
+    language: go
+    layer: execution
+    ecosystem: arbitrum
+  zksync-era:
+    repo: matter-labs/zksync-era
+    category: client
+    tier: 2
+    language: rust
+    layer: execution
+    ecosystem: zksync
+  scroll:
+    repo: scroll-tech/go-ethereum
+    category: client
+    tier: 3
+    language: go
+    layer: execution
+    ecosystem: scroll
+  polygon-cdk:
+    repo: 0xPolygon/cdk
+    category: client
+    tier: 3
+    language: go
+    layer: execution
+    ecosystem: polygon
+  starknet-sequencer:
+    repo: starkware-libs/sequencer
+    category: client
+    tier: 3
+    language: rust
+    layer: execution
+    ecosystem: starknet

@@ -1,0 +1,248 @@
+# domains/os/repos.yml — operating systems and the trusted software below them.
+#
+# Scope rule: a repository belongs here when it runs with privilege that the
+# applications above it cannot revoke — a kernel, a bootloader, a C library, a
+# hypervisor, a trusted execution environment, an init system. A defect here is
+# a defect in every program on the machine.
+#
+# This is the domain where this project's method has the least to prove and the
+# most to learn from: the Linux kernel has been mined for silent fixes for
+# years, and its stable-tree backport discipline is the clearest real-world
+# instance of the `is_backport` signal meaning what we claim it means. Treat
+# kernel results as the calibration set for the other domains, not as new news.
+#
+# A warning about scale: `linux` is ~1.4M commits. Start with --limit, and
+# expect the mirror alone to take tens of minutes and several GB.
+#
+# Extra field carried for this domain:
+#   privilege  kernel | firmware | tee | hypervisor | libc | userland
+
+domain: os
+description: >-
+  Operating-system kernels, bootloaders, hypervisors, trusted execution
+  environments and core system libraries — code running at a privilege the
+  applications above it cannot revoke.
+
+defaults:
+  forge: github.com
+
+repos:
+  # ---- kernels ------------------------------------------------------------
+  linux:
+    repo: torvalds/linux
+    category: kernel
+    tier: 1
+    language: c
+    privilege: kernel
+  linux-stable:
+    repo: gregkh/linux
+    category: kernel
+    tier: 2
+    language: c
+    privilege: kernel
+  freebsd:
+    repo: freebsd/freebsd-src
+    category: kernel
+    tier: 2
+    language: c
+    privilege: kernel
+  openbsd:
+    repo: openbsd/src
+    category: kernel
+    tier: 2
+    language: c
+    privilege: kernel
+  netbsd:
+    repo: NetBSD/src
+    category: kernel
+    tier: 3
+    language: c
+    privilege: kernel
+  illumos:
+    repo: illumos/illumos-gate
+    category: kernel
+    tier: 3
+    language: c
+    privilege: kernel
+  redox:
+    repo: redox-os/kernel
+    category: kernel
+    tier: 3
+    language: rust
+    privilege: kernel
+  sel4:
+    repo: seL4/seL4
+    category: kernel
+    tier: 2
+    language: c
+    privilege: kernel
+  zephyr:
+    repo: zephyrproject-rtos/zephyr
+    category: rtos
+    tier: 2
+    language: c
+    privilege: kernel
+  freertos:
+    repo: FreeRTOS/FreeRTOS-Kernel
+    category: rtos
+    tier: 2
+    language: c
+    privilege: kernel
+  nuttx:
+    repo: apache/nuttx
+    category: rtos
+    tier: 3
+    language: c
+    privilege: kernel
+
+  # ---- hypervisors / isolation -------------------------------------------
+  xen:
+    repo: xen-project/xen
+    category: hypervisor
+    tier: 2
+    language: c
+    privilege: hypervisor
+  qemu:
+    repo: qemu/qemu
+    category: hypervisor
+    tier: 1
+    language: c
+    privilege: hypervisor
+  firecracker:
+    repo: firecracker-microvm/firecracker
+    category: hypervisor
+    tier: 1
+    language: rust
+    privilege: hypervisor
+  cloud-hypervisor:
+    repo: cloud-hypervisor/cloud-hypervisor
+    category: hypervisor
+    tier: 2
+    language: rust
+    privilege: hypervisor
+  gvisor:
+    repo: google/gvisor
+    category: sandbox
+    tier: 2
+    language: go
+    privilege: hypervisor
+  kata-containers:
+    repo: kata-containers/kata-containers
+    category: sandbox
+    tier: 3
+    language: rust
+    privilege: hypervisor
+
+  # ---- firmware / boot ----------------------------------------------------
+  u-boot:
+    repo: u-boot/u-boot
+    category: bootloader
+    tier: 2
+    language: c
+    privilege: firmware
+  coreboot:
+    repo: coreboot/coreboot
+    category: firmware
+    tier: 2
+    language: c
+    privilege: firmware
+  edk2:
+    repo: tianocore/edk2
+    category: firmware
+    tier: 2
+    language: c
+    privilege: firmware
+  grub:
+    repo: rhboot/grub2
+    category: bootloader
+    tier: 3
+    language: c
+    privilege: firmware
+  trusted-firmware-a:
+    repo: ARM-software/arm-trusted-firmware
+    category: firmware
+    tier: 2
+    language: c
+    privilege: firmware
+  op-tee:
+    repo: OP-TEE/optee_os
+    category: tee
+    tier: 1
+    language: c
+    privilege: tee
+  openenclave:
+    repo: openenclave/openenclave
+    category: tee
+    tier: 3
+    language: c
+    privilege: tee
+
+  # ---- C libraries and core userland --------------------------------------
+  glibc:
+    repo: bminor/glibc
+    category: libc
+    tier: 1
+    language: c
+    privilege: libc
+  musl:
+    repo: bminor/musl
+    category: libc
+    tier: 2
+    language: c
+    privilege: libc
+  systemd:
+    repo: systemd/systemd
+    category: init
+    tier: 1
+    language: c
+    privilege: userland
+  busybox:
+    repo: mirror/busybox
+    category: userland
+    tier: 3
+    language: c
+    privilege: userland
+  sudo:
+    repo: sudo-project/sudo
+    category: userland
+    tier: 1
+    language: c
+    privilege: userland
+  openssh:
+    repo: openssh/openssh-portable
+    category: userland
+    tier: 1
+    language: c
+    privilege: userland
+  dbus:
+    repo: freedesktop/dbus
+    category: userland
+    tier: 3
+    language: c
+    privilege: userland
+  util-linux:
+    repo: util-linux/util-linux
+    category: userland
+    tier: 3
+    language: c
+    privilege: userland
+
+  # ---- container runtimes -------------------------------------------------
+  runc:
+    repo: opencontainers/runc
+    category: runtime
+    tier: 1
+    language: go
+    privilege: userland
+  containerd:
+    repo: containerd/containerd
+    category: runtime
+    tier: 2
+    language: go
+    privilege: userland
+  crun:
+    repo: containers/crun
+    category: runtime
+    tier: 3
+    language: c
+    privilege: userland
