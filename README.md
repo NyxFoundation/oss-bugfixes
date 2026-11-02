@@ -167,6 +167,31 @@ recognisable impact class, and scores keywords over *unique* tokens rather than
 occurrences — counting repetitions is how release-note boilerplate once scored
 itself to 1.0 and produced 95 bogus Critical findings.
 
+## The model is shown code, not prose
+
+A diff's text contains sentences the author wrote about the code — the one
+channel this corpus has decided not to trust. So the prompt carries **code
+only**: comment-only lines dropped, trailing comments cut, every structural
+marker kept.
+
+That is a correctness measure before it is an optimisation. Left in, this
+happened:
+
+```diff
+-            // We use 100 because the calldata length is 4 + 32 * 2.
++            // We use 68 because the calldata length is 4 + 32 * 2.
+             let callStatus := call(gas(), token, 0, callData, 68, 0, 0)
+```
+
+All 24 changed lines of that commit were comments and the code always read
+`68`. The model reported *"corrects the calldata length constants … fixing a
+functional bug"* — it had read a comment about a constant as the constant. A
+model that cannot see the comment cannot make that mistake.
+
+It is also the cheapest speed-up available: **22% smaller prompts** across
+5,607 commits, and **816 of them (14.6%) change no code at all**, so the
+structural engine settles those in-process and they never reach an endpoint.
+
 ## Signals are not verdicts
 
 The deterministic pass annotates; it does not gate. A row that fires no signal is
