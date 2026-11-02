@@ -5,3 +5,9 @@ __pycache__/
 .venv/
 .pytest_cache/
 .ruff_cache/
+
+# sink write lock
+*.csv.lock
+
+# Lean build artifacts
+lean/.lake/

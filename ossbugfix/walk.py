@@ -52,16 +52,17 @@ import os
 import signal
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Sequence
 
 import pandas as pd
 
 from . import mirror, schema
 from .registry import Repo
 
-__all__ = ["WalkConfig", "WalkResult", "walk", "iter_commits", "SOURCE_EXT"]
+__all__ = ["WalkConfig", "WalkResult", "walk", "iter_commits", "SOURCE_EXT",
+           "current_tips", "live_tips"]
 
 #: Extensions that make a path "source". Deliberately generous — a domain that
 #: needs more (`.cairo`, `.move`, `.tla`) adds it here rather than in a crawler.
@@ -134,6 +135,21 @@ class WalkConfig:
     #: Hard ceiling on one `git log`. A repo that cannot be walked in this is
     #: reported as failed rather than hanging a 200-repo sweep.
     log_timeout: int = 3_600
+    #: Ref tips from a previous walk. Commits reachable from these are not
+    #: emitted again, which turns a re-walk into "what landed since last time".
+    #: Empty = walk the whole history.
+    since_tips: tuple[str, ...] = ()
+
+    def fingerprint(self) -> str:
+        """Identity of the SHAPE of the output, so an incremental walk can
+        refuse to append rows the previous pass would not have produced.
+
+        `limit` and `since_tips` are excluded: they change how much is walked,
+        not what a kept row looks like.
+        """
+        parts = (self.max_files, self.require_source, self.all_refs,
+                 self.line_counts)
+        return "|".join(str(x) for x in parts)
 
 
 @dataclass
@@ -145,6 +161,14 @@ class WalkResult:
     dropped: dict[str, int] = field(default_factory=dict)
     backport_state: str = "not attempted"
     error: str = ""
+    #: Ref tips at the moment of this walk. Hand these back as
+    #: `WalkConfig.since_tips` next time to collect only what landed after.
+    tips: tuple[str, ...] = ()
+    #: How many of the requested `since_tips` still existed in the mirror. A
+    #: force-push upstream can delete one, and silently excluding nothing would
+    #: look identical to "nothing new landed".
+    tips_used: int = 0
+    incremental: bool = False
 
     @property
     def ok(self) -> bool:
@@ -159,6 +183,15 @@ def walk(repo: Repo, cfg: WalkConfig | None = None) -> WalkResult:
                           error="no mirror — run `oss-bugfixes mirror` first")
 
     path = mirror.mirror_path(repo)
+    usable = live_tips(path, cfg.since_tips) if cfg.since_tips else ()
+    if cfg.since_tips and not usable:
+        # Every recorded tip is gone — a force-push, a re-clone, or a rewritten
+        # history. Excluding nothing is correct here, but saying so matters:
+        # silently falling back would look like "nothing new landed".
+        cfg = replace(cfg, since_tips=())
+    elif usable != tuple(cfg.since_tips):
+        cfg = replace(cfg, since_tips=usable)
+
     rows: list[dict] = []
     dropped: dict[str, int] = {}
     seen = 0
@@ -180,9 +213,40 @@ def walk(repo: Repo, cfg: WalkConfig | None = None) -> WalkResult:
                           error=f"{type(exc).__name__}: {exc}")
 
     df = schema.conform(pd.DataFrame(rows), schema.COMMIT_COLUMNS)
-    res = WalkResult(repo, df, seen=seen, kept=len(df), dropped=dropped)
+    res = WalkResult(repo, df, seen=seen, kept=len(df), dropped=dropped,
+                     tips=current_tips(path), tips_used=len(cfg.since_tips),
+                     incremental=bool(cfg.since_tips))
     _attach_backports(res, path, seen, cfg)
     return res
+
+
+def current_tips(path: Path) -> tuple[str, ...]:
+    """Every ref's sha, right now. Recorded after a walk so the next one can
+    ask git for the difference instead of re-reading the whole history."""
+    r = subprocess.run(["git", "-C", str(path), "for-each-ref", "--format=%(objectname)"],
+                       capture_output=True, text=True, encoding="utf-8",
+                       errors="replace", timeout=120)
+    if r.returncode != 0:
+        return ()
+    return tuple(sorted({ln.strip() for ln in r.stdout.splitlines() if len(ln.strip()) == 40}))
+
+
+def live_tips(path: Path, tips: Sequence[str]) -> tuple[str, ...]:
+    """The subset of `tips` the mirror still has.
+
+    `git log --not <missing sha>` is a fatal error, so a single rewritten
+    branch would otherwise abort the walk of an otherwise healthy repository.
+    """
+    out = []
+    for t in tips:
+        t = str(t).strip()
+        if len(t) != 40:
+            continue
+        r = subprocess.run(["git", "-C", str(path), "cat-file", "-e", f"{t}^{{commit}}"],
+                           capture_output=True, timeout=60)
+        if r.returncode == 0:
+            out.append(t)
+    return tuple(sorted(set(out)))
 
 
 # --- streaming git log parse ------------------------------------------------
@@ -209,6 +273,11 @@ def iter_commits(path: Path, cfg: WalkConfig) -> Iterator[_Record]:
             "--no-renames", f"--format={_FORMAT}"]
     if cfg.all_refs:
         args.insert(4, "--all")
+    if cfg.since_tips:
+        # Everything reachable from the previous walk's tips is already
+        # collected. This is the whole of "incremental": git does the set
+        # difference, so nothing is re-read and nothing is re-parsed.
+        args += ["--not", *cfg.since_tips]
     proc = subprocess.Popen(
         args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         text=True, encoding="utf-8", errors="replace", bufsize=1 << 20,

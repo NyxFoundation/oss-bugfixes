@@ -1,8 +1,35 @@
-# oss-bugfixes
+<h1 align="center">oss-bugfixes</h1>
 
-A uniform harness for mining **bug-fix commits** out of open-source repositories,
-across security domains — smart contracts, blockchain nodes, wallets, operating
-systems and cryptography.
+<p align="center">
+  <em>Mine bug-fix commits out of open-source repositories — across smart
+  contracts, blockchain nodes, wallets, operating systems and cryptography.</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/NyxFoundation/oss-bugfixes/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/NyxFoundation/oss-bugfixes/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white">
+  <img alt="Lean 4" src="https://img.shields.io/badge/Lean-4.31-black?logo=lean&logoColor=white">
+  <img alt="repositories tracked" src="https://img.shields.io/badge/repositories-345-success">
+  <img alt="domains" src="https://img.shields.io/badge/domains-5-informational">
+  <img alt="corpus rows" src="https://img.shields.io/badge/migrated%20corpus-41k%20rows-orange">
+</p>
+
+<p align="center">
+  <a href="#why-walk-every-commit-instead-of-searching-for-security">Why</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#run-it">Run</a> ·
+  <a href="#coverage">Coverage</a> ·
+  <a href="docs/pipeline.md">Pipeline</a> ·
+  <a href="docs/schema.md">Schema</a> ·
+  <a href="docs/deterministic-classification.md">Classifying without a model</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+---
+
+A uniform harness for mining **bug-fix commits** out of open-source
+repositories, across security domains.
 
 One framework, five registries, one output schema:
 
@@ -168,6 +195,7 @@ These are not style preferences; each one is a bug this lineage already shipped.
 
 | engine | needs | for |
 |---|---|---|
+| `lean` | the Lean toolchain | a deterministic pre-filter at **43 commits/sec** — see below |
 | `heuristic` | nothing | CI, baselines, and measuring what the model adds |
 | `llm:claude` | the `claude` CLI | interactive work |
 | `llm:openai` | any OpenAI-compatible endpoint | whole-corpus sweeps (Ollama Cloud, vLLM, LM Studio) |
@@ -176,12 +204,41 @@ These are not style preferences; each one is a bug this lineage already shipped.
 Replies are cached by `(model, prompt)`, so a rerun after a crash costs nothing
 for the part that finished. Adding an engine is one `register()` call.
 
+## The deterministic engine, and its honest limits
+
+[`lean/`](lean) holds a classifier written in Lean 4: a total diff parser, ten
+structural edit detectors, and a three-valued verdict, compiled to a native
+binary with no dependencies beyond the toolchain.
+
+It is in Lean because three of the honesty rules above are **theorems** there
+rather than conventions — `security_needs_witness`, `refuted_is_silent`,
+`signatures_monotone` — checked by the compiler over every input, with no
+`sorry` in the package.
+
+Measured on 2,418 smart-contract commits:
+
+| | |
+|---|---:|
+| throughput | **43 commits/sec** (vs ~0.25 for a hosted model) |
+| provably refuted, needs no model ever | **14%** |
+| abstained and handed on | **78%** |
+
+It is a **filter, not a replacement**. Hand-written token rules over-fire by
+roughly an order of magnitude against a model's base rate, and three rounds of
+tightening did not close that — which is exactly why the literature on this
+problem (VFFinder, Fixseeker, GraphSPD) builds AST and code-property graphs and
+learns, instead of matching tokens.
+[`docs/deterministic-classification.md`](docs/deterministic-classification.md)
+has the numbers, the prior art and the GNN roadmap.
+
 ## Documentation
 
 - [`docs/pipeline.md`](docs/pipeline.md) — each stage, its failure modes, what to do about them
 - [`docs/schema.md`](docs/schema.md) — every column, and what `<NA>` means in it
 - [`docs/adding-a-domain.md`](docs/adding-a-domain.md) — adding a domain or a repository
 - [`docs/corpora.md`](docs/corpora.md) — where the migrated corpora came from
+- [`docs/deterministic-classification.md`](docs/deterministic-classification.md) — classifying without a model: prior art, the Lean core, and what it does not do
+- [`lean/README.md`](lean/README.md) — the Lean package itself
 
 ## Lineage
 
@@ -197,6 +254,24 @@ histories and lets the model judge; the earlier Ethereum one started from keywor
 search and therefore could not see a silent fix by construction. Where the two
 disagreed, the wallet design won.
 
+## Contributing
+
+The highest-value contribution is a **registry entry**: one repository, one
+`repos.yml` line, no code. See
+[`docs/adding-a-domain.md`](docs/adding-a-domain.md) and
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+Corrections to the corpus are equally welcome. A row whose `classifier` is
+`human` is never overwritten by a model, so a hand-checked verdict is
+permanent.
+
 ## Licence
 
-MIT. The registries, the framework and the migrated corpora are all open.
+MIT — the framework, the registries and the migrated corpora alike. See
+[`LICENSE`](LICENSE).
+
+## Citing
+
+If this corpus or harness is useful in published work, cite the repository and
+the predecessor datasets it supersedes (listed under
+[Lineage](#lineage)).

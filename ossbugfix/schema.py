@@ -19,6 +19,14 @@ from typing import Any
 
 import pandas as pd
 
+#: Bumped whenever the meaning or membership of the column lists changes.
+#: Stored alongside every artifact so a later run can tell whether what is on
+#: disk was produced by the same contract it is about to append to. An
+#: incremental stage refuses to append across a bump and re-walks instead,
+#: because a frame whose rows were made two different ways is worse than a
+#: frame that took longer to build.
+SCHEMA_VERSION = "1"
+
 # --- one row per commit, straight from git ---------------------------------
 COMMIT_COLUMNS: list[str] = [
     "domain",           # smartcontract | blockchain | wallet | os | crypto
@@ -110,18 +118,26 @@ def _dtype_for(col: str) -> str:
     return "string"
 
 
-def conform(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-    """Return `df` with exactly `columns`, in order, with the declared dtypes.
+def conform(df: pd.DataFrame, columns: list[str], *,
+            keep_extra: bool = False) -> pd.DataFrame:
+    """Return `df` with `columns`, in order, with the declared dtypes.
 
     Missing columns are added empty rather than raising: a frame that has not
     been through the signals stage yet is still a valid commit frame, and the
-    sink should be able to write it.
+    sink should be able to write it. That is what makes the schema additive —
+    a table written by an older version still loads under a newer one.
+
+    `keep_extra=True` appends columns the schema does not know about instead of
+    dropping them. The published table uses it, because a column somebody added
+    by hand is data, and dropping it on the next merge would be the pipeline
+    quietly destroying work it did not understand.
     """
     out = df.copy()
     for col in columns:
         if col not in out.columns:
             out[col] = pd.Series([pd.NA] * len(out), index=out.index, dtype=_dtype_for(col))
-    out = out[columns]
+    extra = [c for c in out.columns if c not in columns] if keep_extra else []
+    out = out[columns + extra]
     for col in columns:
         want = _dtype_for(col)
         if str(out[col].dtype) == want:

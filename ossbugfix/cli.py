@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 
 from . import __version__, classify as classify_mod
-from . import mirror, paths, pipeline, registry, walk
+from . import manifest, mirror, paths, pipeline, registry, schema, walk
 from .sink import Sink
 from .state import Stage, StageState
 
@@ -83,6 +83,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "on a blobless one this is a network fetch per commit")
     p.add_argument("--keep-non-source", action="store_true",
                    help="keep commits that touch no recognised source file")
+    p.add_argument("--full", action="store_true",
+                   help="re-read the whole history instead of only what landed "
+                        "since the last walk")
 
     p = sub.add_parser("signals", help="annotate frames with deterministic signals")
     selection(p); runner(p)
@@ -131,6 +134,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("status", help="what each stage has done so far")
     p.add_argument("--domain", help="one domain, or every domain if omitted")
 
+    p = sub.add_parser("migrate",
+                       help="bring an existing table up to the current schema")
+    p.add_argument("--domain", help="one domain, or every domain if omitted")
+    p.add_argument("--apply", action="store_true",
+                   help="actually rewrite. Without it, only say what would change")
+
     return ap
 
 
@@ -158,6 +167,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _cmd_validate(args)
     if cmd == "status":
         return _cmd_status(args)
+    if cmd == "migrate":
+        return _cmd_migrate(args)
 
     reg = registry.load(args.domain)
     repos = reg.select(
@@ -177,7 +188,7 @@ def _dispatch(args: argparse.Namespace) -> int:
     elif cmd == "walk":
         rep = pipeline.run_walk(args.domain, repos, cfg=_walk_cfg(args),
                                 workers=args.workers, force=args.force,
-                                quiet=args.quiet)
+                                full=args.full, quiet=args.quiet)
     elif cmd == "signals":
         rep = pipeline.run_signals(args.domain, repos, min_signals=args.min_signals,
                                    workers=args.workers, force=args.force,
@@ -298,6 +309,42 @@ def _cmd_run(args: argparse.Namespace, repos) -> int:
     return 1 if any(r.failed for r in reports) else 0
 
 
+def _cmd_migrate(args: argparse.Namespace) -> int:
+    """Rewrite a published table under the current schema.
+
+    Dry by default. A migration that silently rewrote 34,000 rows would be
+    indistinguishable from a bug, so you get to read the diff first.
+    """
+    domains = [args.domain] if args.domain else paths.list_domains()
+    touched = 0
+    for d in domains:
+        sink = Sink(d)
+        if not sink.path.exists():
+            continue
+        df = sink.read()                      # conform() already migrates on read
+        notes = manifest.plan_migration(d, df)
+        rel = sink.path.relative_to(paths.repo_root())
+        if not notes:
+            print(f"{d}: {rel} is current ({len(df):,} rows, "
+                  f"schema {schema.SCHEMA_VERSION})")
+            continue
+        print(f"{d}: {rel} ({len(df):,} rows)")
+        for n in notes:
+            print(f"  - {n}")
+        if not args.apply:
+            print("  (dry run — pass --apply to rewrite)")
+            continue
+        sink.merge(df.iloc[0:0])              # rewrites through the conformed path
+        sink._write(df)
+        sink.write_preview()
+        manifest.write(d, sink.read())
+        touched += 1
+        print(f"  rewritten; manifest updated")
+    if not args.apply and touched == 0:
+        return 0
+    return 0
+
+
 def _cmd_status(args: argparse.Namespace) -> int:
     domains = [args.domain] if args.domain else paths.list_domains()
     for d in domains:
@@ -331,6 +378,18 @@ def _cmd_status(args: argparse.Namespace) -> int:
             print(f"  csv       {len(df):,} rows, {labelled:,} classified, "
                   f"{fixes:,} bug fixes, {sec:,} security fixes "
                   f"→ {sink.path.relative_to(paths.repo_root())}")
+            mf = manifest.read(d)
+            if mf:
+                by = ", ".join(f"{k} {v:,}" for k, v in
+                               sorted(mf.get("by_classifier", {}).items()))
+                print(f"  manifest  schema {mf.get('schema_version')}, "
+                      f"oss-bugfixes {mf.get('tool_version')}, "
+                      f"updated {mf.get('updated_at')}"
+                      + (f" — {by}" if by else ""))
+            stale = manifest.plan_migration(d, df)
+            if stale:
+                print(f"  migrate   {len(stale)} change(s) pending — "
+                      f"run `oss-bugfixes migrate --domain {d}`")
     return 0
 
 

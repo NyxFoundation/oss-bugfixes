@@ -32,6 +32,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import threading
 import time
@@ -43,7 +44,64 @@ from typing import Any, Sequence
 
 from .base import Classifier, ClassifyError, CommitView, Verdict
 
-__all__ = ["LLMClassifier", "PROMPT_TEMPLATE"]
+__all__ = ["LLMClassifier", "PROMPT_TEMPLATE", "ssl_context"]
+
+#: Where a CA bundle lives on systems whose Python cannot find its own.
+#: A relocatable interpreter (uv's python-build-standalone, conda, a venv
+#: copied between machines) is compiled with a cafile path from the build host:
+#: on NixOS that is `/etc/ssl/cert.pem`, which does not exist, and every HTTPS
+#: call dies with CERTIFICATE_VERIFY_FAILED. Making the caller export
+#: SSL_CERT_FILE works and is what the predecessor pipelines did, but it means
+#: the tool is broken out of the box on a common platform, so resolve it here.
+_CA_CANDIDATES = (
+    "/etc/ssl/certs/ca-certificates.crt",    # Debian, Ubuntu, Arch, NixOS
+    "/etc/pki/tls/certs/ca-bundle.crt",      # RHEL, Fedora
+    "/etc/ssl/ca-bundle.pem",                # openSUSE
+    "/etc/ssl/cert.pem",                     # Alpine, macOS ports
+    "/usr/local/etc/openssl/cert.pem",       # Homebrew
+)
+_ssl_ctx: ssl.SSLContext | None = None
+
+
+def ssl_context() -> ssl.SSLContext:
+    """A verifying SSL context that actually has a CA bundle.
+
+    Never returns an unverified context: a classifier that silently stopped
+    checking certificates would be a worse bug than the one it works around.
+    If nothing is found, the platform default is returned and the caller gets
+    the real error.
+    """
+    global _ssl_ctx
+    if _ssl_ctx is not None:
+        return _ssl_ctx
+    ctx = ssl.create_default_context()
+    paths = ctx.cert_store_stats()
+    if paths.get("x509") or paths.get("x509_ca"):
+        _ssl_ctx = ctx
+        return ctx
+    for env in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE"):
+        val = os.environ.get(env)
+        if val and os.path.exists(val):
+            ctx.load_verify_locations(cafile=val)
+            _ssl_ctx = ctx
+            return ctx
+    try:
+        import certifi
+        ctx.load_verify_locations(cafile=certifi.where())
+        _ssl_ctx = ctx
+        return ctx
+    except (ImportError, OSError):
+        pass
+    for cand in _CA_CANDIDATES:
+        if os.path.exists(cand):
+            try:
+                ctx.load_verify_locations(cafile=cand)
+            except OSError:
+                continue
+            _ssl_ctx = ctx
+            return ctx
+    _ssl_ctx = ctx
+    return ctx
 
 DEFAULT_TIMEOUT = int(os.environ.get("OSS_BUGFIXES_LLM_TIMEOUT", "180"))
 MAX_RETRIES = 4
@@ -240,7 +298,8 @@ class LLMClassifier(Classifier):
         req = urllib.request.Request(
             url, data=json.dumps(payload).encode("utf-8"), headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            with urllib.request.urlopen(req, timeout=self.timeout,
+                                        context=ssl_context()) as r:
                 return json.loads(r.read().decode("utf-8", "replace"))
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", "replace")[:200]

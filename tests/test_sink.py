@@ -75,3 +75,33 @@ def test_round_trip_preserves_tri_state_booleans(tmp_path):
     got = sink.read().iloc[0]
     assert pd.isna(got["is_bugfix"]), "a declined verdict must not become False"
     assert got["is_security_fix"] is False or got["is_security_fix"] == False  # noqa: E712
+
+
+def test_concurrent_merges_do_not_lose_rows(tmp_path):
+    """Two classifier runs over one domain must not clobber each other.
+
+    Atomic rename is not enough on its own: each process reads, merges into
+    what it read, and the second rename discards the first one's rows. This is
+    the regression test for 178 model-labelled rows lost exactly that way.
+    """
+    import multiprocessing as mp
+
+    path = tmp_path / "bugfixes.csv"
+    Sink("d", path).merge(row(sha="0" * 40))        # create the table
+
+    def writer(tag: str, start: int, n: int) -> None:
+        s = Sink("d", path)
+        for i in range(n):
+            s.merge(row(sha=f"{tag}{i:039d}", classifier=tag))
+
+    procs = [mp.Process(target=writer, args=("a", 0, 12)),
+             mp.Process(target=writer, args=("b", 0, 12))]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(timeout=120)
+
+    df = Sink("d", path).read()
+    assert len(df) == 25, f"rows were lost to a concurrent write: {len(df)}"
+    assert (df["classifier"] == "a").sum() == 12
+    assert (df["classifier"] == "b").sum() == 12

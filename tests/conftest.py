@@ -71,3 +71,26 @@ def mirrored(tmp_path: Path, source_repo: Path, monkeypatch):
     subprocess.run(["git", "clone", "--bare", "-q", str(source_repo), str(dest)],
                    check=True, capture_output=True)
     return repo
+
+
+@pytest.fixture
+def commit_to_source(source_repo: Path, mirrored):
+    """Add a commit upstream and fetch it into the mirror, as a refresh would.
+
+    Returns a callable so a test can simulate "time passed and work landed",
+    which is the only way to check incremental collection means what it says.
+    """
+    from ossbugfix import mirror as mirror_mod
+
+    def add(subject: str, body: str = "", path: str = "lib.c") -> str:
+        f = source_repo / path
+        f.write_text((f.read_text() if f.exists() else "") + f"// {subject}\n")
+        _git(source_repo, "add", "-A")
+        _git(source_repo, "commit", "-qm", subject + (("\n\n" + body) if body else ""))
+        dest = mirror_mod.mirror_path(mirrored)
+        subprocess.run(["git", "-C", str(dest), "fetch", "--prune", "--force",
+                        "origin", "+refs/heads/*:refs/heads/*"],
+                       check=True, capture_output=True)
+        return _git(source_repo, "rev-parse", "HEAD").strip()
+
+    return add

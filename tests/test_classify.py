@@ -67,3 +67,19 @@ def test_prompt_passes_signals_through():
 
 def test_prompt_says_signals_absent_is_normal():
     assert "common for silent fixes" in build_prompt(view())
+
+
+def test_a_failed_verdict_says_why():
+    """Undecided with a blank rationale cannot be triaged: an endpoint that
+    timed out and a model that declined look identical."""
+    from ossbugfix.classify.base import Verdict
+    row = Verdict(classifier="llm:openai", error="URLError: timed out").as_row()
+    assert row["is_bugfix"] is None
+    assert "not classified" in row["rationale"] and "timed out" in row["rationale"]
+    assert "error" not in row
+
+
+def test_a_real_rationale_is_not_overwritten_by_an_error():
+    from ossbugfix.classify.base import Verdict
+    row = Verdict(rationale="model said no", error="late warning").as_row()
+    assert row["rationale"] == "model said no"

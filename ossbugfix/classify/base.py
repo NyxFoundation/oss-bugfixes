@@ -56,8 +56,18 @@ class Verdict:
     error: str = ""
 
     def as_row(self) -> dict[str, Any]:
+        """The verdict as columns.
+
+        A failure surfaces in `rationale`. Recording the row as undecided and
+        saying nothing else is only half the honesty rule: the first sweep
+        that did this left 125 rows blank with no way to tell a model that
+        declined from an endpoint that timed out, which is the difference
+        between "re-run it" and "look at the commit".
+        """
         d = asdict(self)
-        d.pop("error", None)
+        err = d.pop("error", "") or ""
+        if err and not (d.get("rationale") or "").strip():
+            d["rationale"] = f"[not classified] {err}"[:1000]
         return d
 
 

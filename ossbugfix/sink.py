@@ -13,9 +13,16 @@ produce. Rules it keeps:
     awkward to type.
   * **atomic.** Written to a temp file and renamed, so an interrupted run
     leaves the previous table intact rather than a half-written one.
+  * **locked.** The whole read-modify-write is held under an advisory lock on
+    a sibling `.lock` file. Atomic rename alone is not enough: two classifier
+    runs over the same domain each read, each merge into what they read, and
+    the second rename silently discards the first one's rows. That is not
+    hypothetical — starting a `lean` sweep beside a still-running `llm` sweep
+    cost 178 model-labelled rows before this lock existed.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -57,16 +64,47 @@ class Sink:
         self.path = Path(self.path) if self.path else (
             paths.domain_data_dir(self.domain) / "bugfixes.csv")
 
+    @property
+    def lock_path(self) -> Path:
+        return self.path.with_name(self.path.name + ".lock")
+
+    @contextlib.contextmanager
+    def _locked(self):
+        """Serialise writers. Advisory and POSIX-only; on a platform without
+        `fcntl` the merge proceeds unlocked rather than failing, which is no
+        worse than the behaviour that was there before."""
+        try:
+            import fcntl
+        except ImportError:                       # pragma: no cover - Windows
+            yield
+            return
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.lock_path, "w") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+
     def read(self) -> pd.DataFrame:
         if not self.path.exists():
             return schema.empty(schema.BUGFIX_COLUMNS)
         df = pd.read_csv(self.path, dtype=str, keep_default_na=False,
                          na_values=[""], low_memory=False)
-        return schema.conform(df, schema.BUGFIX_COLUMNS)
+        return schema.conform(df, schema.BUGFIX_COLUMNS, keep_extra=True)
 
     def merge(self, incoming: pd.DataFrame, *,
               overwrite_human: bool = False) -> MergeStats:
-        """Merge `incoming` into the table on disk and write it back."""
+        """Merge `incoming` into the table on disk and write it back.
+
+        The read, the merge and the write happen under one lock, so a
+        concurrent run waits rather than overwriting what this one just added.
+        """
+        with self._locked():
+            return self._merge_locked(incoming, overwrite_human=overwrite_human)
+
+    def _merge_locked(self, incoming: pd.DataFrame, *,
+                      overwrite_human: bool) -> MergeStats:
         incoming = self._prepare(incoming)
         if not len(incoming):
             existing = self.read()
@@ -101,7 +139,7 @@ class Sink:
                           total=len(merged))
 
     def _prepare(self, df: pd.DataFrame) -> pd.DataFrame:
-        out = schema.conform(df, schema.BUGFIX_COLUMNS)
+        out = schema.conform(df, schema.BUGFIX_COLUMNS, keep_extra=True)
         if not len(out):
             return out
         need_id = out["id"].isna() | (out["id"].fillna("") == "")
@@ -120,7 +158,7 @@ class Sink:
         return out.drop_duplicates(subset=list(schema.KEY_COLUMNS), keep="last")
 
     def _write(self, df: pd.DataFrame) -> None:
-        out = schema.conform(df, schema.BUGFIX_COLUMNS)
+        out = schema.conform(df, schema.BUGFIX_COLUMNS, keep_extra=True)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
         out.to_csv(tmp, index=False)

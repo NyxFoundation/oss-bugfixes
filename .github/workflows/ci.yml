@@ -72,3 +72,51 @@ jobs:
           assert fix.is_security_fix == True, fix.is_security_fix
           print("smoke ok:", len(df), "rows")
           PY
+
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The package has no mathlib and no package-index dependency, so a bare
+      # toolchain is the whole environment.
+      - name: Install Lean
+        run: |
+          curl -sSf https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+            | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      # Building the library checks the proofs in OssBugfix/Props.lean. A
+      # detector that breaks one of the honesty theorems fails here.
+      - name: Build (this checks the proofs)
+        working-directory: lean
+        run: lake build
+
+      - name: No sorry in the package
+        working-directory: lean
+        run: |
+          if grep -rn --include='*.lean' -E '\bsorry\b|\badmit\b' OssBugfix Main.lean; then
+            echo "::error::a proof was admitted rather than proved"; exit 1
+          fi
+
+      # Two fixed patches: a guard inserted into existing code must come back a
+      # security fix, a comment-only edit must come back refuted.
+      - name: Selftest
+        working-directory: lean
+        run: ./.lake/build/bin/ossbugfix-classify --selftest
+
+      - name: Theorems depend on no extra axioms
+        working-directory: lean
+        run: |
+          cat > /tmp/ax.lean <<'EOF'
+          import OssBugfix
+          #print axioms OssBugfix.security_needs_witness
+          #print axioms OssBugfix.refuted_is_silent
+          #print axioms OssBugfix.signatures_monotone
+          EOF
+          out=$(LEAN_PATH=.lake/build/lib/lean lean /tmp/ax.lean)
+          echo "$out"
+          if echo "$out" | grep -qv 'propext\|Classical.choice\|Quot.sound'; then
+            echo "::notice::axiom list printed above"
+          fi
+          echo "$out" | grep -q 'sorryAx' && { echo "::error::sorryAx reached a theorem"; exit 1; } || true

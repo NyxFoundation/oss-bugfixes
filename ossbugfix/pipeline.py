@@ -14,16 +14,17 @@ and carries on. `oss-bugfixes status` is then how you find out what to retry.
 """
 from __future__ import annotations
 
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
 import pandas as pd
 
 from . import diffs as diffs_mod
-from . import mirror, paths, schema, signals, walk
+from . import manifest, mirror, paths, schema, signals, walk
 from .classify.base import Classifier, CommitView
 from .registry import Repo
 from .sink import Sink
@@ -124,38 +125,108 @@ def run_mirror(domain: str, repos: Sequence[Repo], *, workers: int = 4,
 # --- stage 2: walk ----------------------------------------------------------
 
 def run_walk(domain: str, repos: Sequence[Repo], *, cfg: walk.WalkConfig | None = None,
-             workers: int = 4, force: bool = False, quiet: bool = False) -> StageReport:
+             workers: int = 4, force: bool = False, full: bool = False,
+             quiet: bool = False) -> StageReport:
+    """Enumerate commits, collecting only what landed since the last walk.
+
+    A repository that has been walked before records its ref tips. The next
+    walk hands them to `git log --not`, so git computes the set difference and
+    nothing already collected is re-read, re-parsed or re-classified. The new
+    rows are appended to the existing frame and de-duplicated by sha.
+
+    Three things force a full re-walk instead, because appending would produce
+    a frame whose rows were not all made the same way:
+
+      * `--force` / `--full`, asked for explicitly;
+      * the walk configuration changed shape (`max_files`, `require_source`,
+        `all_refs`, `line_counts`) — rows from the two passes would not be
+        comparable;
+      * the previous frame is missing, unreadable, or predates the current
+        commit schema.
+    """
     cfg = cfg or walk.WalkConfig()
     st = StageState(domain, Stage.WALK)
     rep = StageReport(Stage.WALK)
     out_dir = paths.commits_dir(domain)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    todo = []
-    for r in repos:
-        if not force and st.done(r.slug) and (out_dir / f"{r.slug}.parquet").exists():
-            rep.skipped += 1
-            continue
-        todo.append(r)
-
     def one(repo: Repo) -> tuple[bool, str]:
-        res = walk.walk(repo, cfg)
-        if not res.ok:
-            st.record(repo.slug, ok=False, error=res.error)
-            return False, res.error
         path = out_dir / f"{repo.slug}.parquet"
-        res.frame.to_parquet(path, index=False)
-        st.record(repo.slug, ok=True, seen=res.seen, kept=res.kept,
-                  dropped=res.dropped, backports=res.backport_state)
-        rep.rows += res.kept
-        drops = ", ".join(f"{k}={v}" for k, v in sorted(res.dropped.items()))
-        return True, (f"{res.kept:,}/{res.seen:,} kept"
-                      + (f" (dropped {drops})" if drops else "")
-                      + f"; {res.backport_state}")
+        prior = st.get(repo.slug)
+        existing, why_full = _prior_frame(path, prior, cfg, force or full)
 
-    rep.ok, rep.failed, rep.notes = _parallel(todo, one, workers, "walk", quiet)
+        run_cfg = cfg
+        if existing is not None:
+            tips = tuple(prior.get("tips") or ())
+            if tips:
+                run_cfg = replace(cfg, since_tips=tips)
+            else:
+                existing, why_full = None, "no ref tips recorded"
+
+        res = walk.walk(repo, run_cfg)
+        if not res.ok:
+            st.record(repo.slug, ok=False, error=res.error,
+                      tips=list(prior.get("tips") or ()))
+            return False, res.error
+
+        if existing is not None:
+            merged = pd.concat([existing, res.frame], ignore_index=True)
+            merged = merged.drop_duplicates(subset=["sha"], keep="last")
+            added = len(merged) - len(existing)
+            note = (f"+{added:,} new (total {len(merged):,})"
+                    if added else f"nothing new (total {len(merged):,})")
+            if res.tips_used < len(run_cfg.since_tips or ()):
+                note += "; some recorded tips were gone upstream"
+        else:
+            merged, added = res.frame, len(res.frame)
+            note = (f"{res.kept:,}/{res.seen:,} kept"
+                    + (f" [full re-walk: {why_full}]" if why_full else ""))
+            drops = ", ".join(f"{k}={v}" for k, v in sorted(res.dropped.items()))
+            if drops:
+                note += f" (dropped {drops})"
+            note += f"; {res.backport_state}"
+
+        merged = schema.conform(merged, schema.COMMIT_COLUMNS)
+        _atomic_parquet(merged, path)
+        st.record(repo.slug, ok=True, seen=res.seen, kept=len(merged),
+                  added=added, incremental=existing is not None,
+                  dropped=res.dropped, backports=res.backport_state,
+                  tips=list(res.tips), config=cfg.fingerprint(),
+                  schema_version=schema.SCHEMA_VERSION)
+        rep.rows += added
+        return True, note
+
+    rep.ok, rep.failed, rep.notes = _parallel(list(repos), one, workers, "walk", quiet)
     st.save()
     return rep
+
+
+def _prior_frame(path, prior: dict, cfg: walk.WalkConfig,
+                 force: bool) -> tuple[pd.DataFrame | None, str]:
+    """The frame to append to, or None with the reason a full walk is needed."""
+    if force:
+        return None, "requested"
+    if not prior.get("ok") or not path.exists():
+        return None, ""
+    if prior.get("config") and prior["config"] != cfg.fingerprint():
+        return None, "walk configuration changed"
+    if prior.get("schema_version") != schema.SCHEMA_VERSION:
+        return None, (f"commit schema {prior.get('schema_version')} -> "
+                      f"{schema.SCHEMA_VERSION}")
+    try:
+        df = pd.read_parquet(path)
+    except (OSError, ValueError) as exc:
+        return None, f"previous frame unreadable ({type(exc).__name__})"
+    if "sha" not in df.columns:
+        return None, "previous frame has no sha column"
+    return schema.conform(df, schema.COMMIT_COLUMNS), ""
+
+
+def _atomic_parquet(df: pd.DataFrame, path) -> None:
+    """Never leave a half-written frame where a readable one used to be."""
+    tmp = path.with_suffix(".tmp.parquet")
+    df.to_parquet(tmp, index=False)
+    os.replace(tmp, path)
 
 
 # --- stage 3: signals -------------------------------------------------------
@@ -171,9 +242,17 @@ def run_signals(domain: str, repos: Sequence[Repo], *, min_signals: int = 0,
 
     todo = []
     for r in repos:
-        if not (src_dir / f"{r.slug}.parquet").exists():
+        src = src_dir / f"{r.slug}.parquet"
+        dst = out_dir / f"{r.slug}.parquet"
+        if not src.exists():
             continue
-        if not force and st.done(r.slug) and (out_dir / f"{r.slug}.parquet").exists():
+        # Cheap and deterministic, so the only question is whether the input
+        # moved. An incremental walk appends rows; re-annotating the whole
+        # frame then costs seconds and keeps every row made the same way.
+        fresh = (dst.exists() and st.done(r.slug)
+                 and dst.stat().st_mtime >= src.stat().st_mtime
+                 and st.get(r.slug).get("schema_version") == schema.SCHEMA_VERSION)
+        if not force and fresh:
             rep.skipped += 1
             continue
         todo.append(r)
@@ -181,10 +260,11 @@ def run_signals(domain: str, repos: Sequence[Repo], *, min_signals: int = 0,
     def one(repo: Repo) -> tuple[bool, str]:
         df = pd.read_parquet(src_dir / f"{repo.slug}.parquet")
         annotated = signals.annotate(df, min_signals=min_signals)
-        annotated.to_parquet(out_dir / f"{repo.slug}.parquet", index=False)
+        _atomic_parquet(annotated, out_dir / f"{repo.slug}.parquet")
         kept = int((annotated["prefilter"] == "keep").sum())
         fired = int((annotated["n_signals"].fillna(0) > 0).sum())
-        st.record(repo.slug, ok=True, rows=len(annotated), kept=kept, fired=fired)
+        st.record(repo.slug, ok=True, rows=len(annotated), kept=kept, fired=fired,
+                  schema_version=schema.SCHEMA_VERSION)
         rep.rows += kept
         return True, f"{len(annotated):,} rows, {fired:,} with a signal, {kept:,} kept"
 
@@ -308,6 +388,7 @@ def run_classify(domain: str, repos: Sequence[Repo], classifier: Classifier, *,
                       engine=getattr(classifier, "engine_label", classifier.name))
     st.save()
     sink.write_preview()
+    manifest.write(domain, sink.read())
     return rep
 
 

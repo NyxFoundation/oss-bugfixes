@@ -1,0 +1,14 @@
+name = "ossbugfix"
+version = "0.1.0"
+defaultTargets = ["OssBugfix", "ossbugfix-classify"]
+
+# No mathlib. The core is a total function over strings and the proofs are
+# about its structure, so the whole package builds from a bare toolchain in
+# seconds — which is what makes it usable as a pipeline stage rather than a
+# research artifact.
+[[lean_lib]]
+name = "OssBugfix"
+
+[[lean_exe]]
+name = "ossbugfix-classify"
+root = "Main"
