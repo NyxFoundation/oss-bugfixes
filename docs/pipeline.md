@@ -170,7 +170,23 @@ oss-bugfixes classify --domain wallet --reclassify --engine llm:claude
 
 Rows already carrying a verdict are skipped unless `--reclassify`. Replies are
 cached by `(model, prompt)` under `work/<d>/llm_cache.json`, so a rerun after a
-crash re-asks nothing.
+crash re-asks nothing. Changing the prompt changes the key, which is correct —
+a different question deserves a different answer — and does mean a prompt
+change discards the cache.
+
+**Three things happen before the model is asked anything**, and each is there
+because of a measured failure or a measured cost:
+
+| step | effect |
+|---|---|
+| comments stripped from the diff | **22% smaller prompts**; a model that cannot see a comment cannot be fooled by one |
+| provable refutations settled in-process (`--no-prefilter` to disable) | **14.6%** of commits never reach an endpoint |
+| positives overruled by a provable refutation (`--no-veto` to disable) | a fact about the diff outranks a guess about it |
+
+The middle one is what the deterministic engine was built for. A commit whose
+diff changes no code token needs no model: the refutation was right 67 times
+out of 67 where a model disagreed, and asking anyway is time spent being told
+something already known.
 
 The prompt follows LLM4VFD (arXiv:2501.14983): code-change intention, plus the
 development artifacts, plus light structural context, answered as one JSON
