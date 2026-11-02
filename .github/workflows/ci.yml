@@ -14,23 +14,27 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
+      # A venv, not --system: the runner's Python is externally managed and
+      # refuses a system install.
       - name: Install
-        run: uv pip install --system -e ".[dev]"
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
 
       # The registries are the coverage claim, so a malformed one is a build
       # failure rather than something you find out about mid-sweep.
       - name: Validate every registry
-        run: oss-bugfixes validate
+        run: uv run oss-bugfixes validate
 
       # Offline: the fixtures build real git repositories in a tmpdir, so the
       # walk, diff and sink stages run against actual git behaviour.
       - name: Tests
-        run: python -m pytest -q
+        run: uv run python -m pytest -q
 
       # Proves the whole chain end to end without a network or an API key.
       - name: Smoke the pipeline on a local repository
         run: |
-          python - <<'PY'
+          uv run python - <<'PY'
           import subprocess, tempfile, os, pathlib, sys
           tmp = pathlib.Path(tempfile.mkdtemp())
           src = tmp / "src"; src.mkdir()
