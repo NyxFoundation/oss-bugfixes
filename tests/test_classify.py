@@ -155,3 +155,42 @@ def test_cloudflare_1010_is_read_as_a_rate_limit_not_a_refusal():
         assert raised is not None and raised.rate_limited is True
     finally:
         urllib.request.urlopen = original   # type: ignore[assignment]
+
+
+def test_requests_announce_a_user_agent():
+    """urllib's default is `Python-urllib/3.12`, which a Cloudflare-fronted
+    endpoint answers with `403 error code: 1010` — a bot block, not a rate
+    limit. Measured against ollama.com: curl/8.0 → 200, no UA → 200,
+    Python-urllib/3.12 → 403. It cost 812 commits and a wrong diagnosis."""
+    import json
+    import urllib.request
+
+    from ossbugfix.classify.llm import USER_AGENT, LLMClassifier
+
+    assert "urllib" not in USER_AGENT.lower()
+    seen: dict[str, str] = {}
+
+    class _Resp:
+        status = 200
+
+        def read(self) -> bytes:
+            return json.dumps({"choices": [{"message": {"content": "{}"}}]}).encode()
+
+        def __enter__(self) -> "_Resp":
+            return self
+
+        def __exit__(self, *a: object) -> None:
+            return None
+
+    def fake(req, *a: object, **k: object) -> "_Resp":
+        seen.update({k.lower(): v for k, v in req.header_items()})
+        return _Resp()
+
+    original = urllib.request.urlopen
+    urllib.request.urlopen = fake           # type: ignore[assignment]
+    try:
+        eng = LLMClassifier(backend="openai", base_url="http://x/v1", model="m")
+        eng._post("http://x/v1/chat/completions", {}, {"Content-Type": "application/json"})
+    finally:
+        urllib.request.urlopen = original   # type: ignore[assignment]
+    assert seen.get("user-agent") == USER_AGENT

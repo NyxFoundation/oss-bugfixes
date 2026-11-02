@@ -113,6 +113,15 @@ def ssl_context() -> ssl.SSLContext:
     return ctx
 
 DEFAULT_TIMEOUT = int(os.environ.get("OSS_BUGFIXES_LLM_TIMEOUT", "180"))
+
+#: urllib announces itself as `Python-urllib/3.12`, and a Cloudflare-fronted
+#: endpoint answers that with `403 error code: 1010` — a bot-integrity block,
+#: not a rate limit. Measured against ollama.com: `curl/8.0` 200, no UA at all
+#: 200, `Python-urllib/3.12` 403. It cost 812 commits, and it cost a wrong
+#: diagnosis before that: the blocked calls were read as the endpoint being
+#: busy, which made every latency figure taken through this client an
+#: overstatement.
+USER_AGENT = os.environ.get("OSS_BUGFIXES_USER_AGENT", "oss-bugfixes/0.1")
 #: Attempts for an ordinary transient error.
 MAX_RETRIES = 4
 #: Attempts when the endpoint is RATE LIMITING rather than failing. These are
@@ -317,7 +326,7 @@ class LLMClassifier(Classifier):
             # ones, a quarter of the corpus lost to a number.
             "max_tokens": self.max_tokens,
         }
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", "User-Agent": USER_AGENT}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
         data = self._post(f"{self.base_url.rstrip('/')}/chat/completions", payload, headers)
@@ -348,10 +357,12 @@ class LLMClassifier(Classifier):
                    "prompt": f"{SYSTEM}\n\n{prompt}",
                    "stream": False, "options": {"temperature": 0}}
         data = self._post(f"{self.base_url.rstrip('/')}/api/generate", payload,
-                          {"Content-Type": "application/json"})
+                          {"Content-Type": "application/json",
+                           "User-Agent": USER_AGENT})
         return str(data.get("response", ""))
 
     def _post(self, url: str, payload: dict, headers: dict) -> dict[str, Any]:
+        headers = {"User-Agent": USER_AGENT, **headers}
         req = urllib.request.Request(
             url, data=json.dumps(payload).encode("utf-8"), headers=headers)
         try:
