@@ -25,9 +25,9 @@ import pandas as pd
 
 from . import diffs as diffs_mod
 from . import manifest, mirror, paths, schema, signals, walk
-from .classify.base import Classifier, CommitView
+from .classify.base import Classifier, CommitView, is_failure
 from .registry import Repo
-from .sink import Sink
+from .sink import HUMAN_CLASSIFIER, Sink
 from .state import Stage, StageState
 
 __all__ = ["StageReport", "run_mirror", "run_walk", "run_signals",
@@ -419,7 +419,19 @@ def run_classify(domain: str, repos: Sequence[Repo], classifier: Classifier, *,
     if skip_classified:
         done = sink.read()
         if len(done):
-            labelled = done[done["classifier"].fillna("") != ""]
+            # A row whose classifier never got an answer is work still owed,
+            # not a result. Treating it as done is how 2,375 rows that died on
+            # a token limit became permanently unclassifiable: every rerun
+            # skipped them because something had once tried.
+            #
+            # A row where the engine looked and DECLINED is different — that is
+            # a result, and the heuristic and structural engines produce it
+            # constantly by design. The two are told apart by the failure
+            # marker the verdict writes into its own rationale.
+            tried = done["classifier"].fillna("") != ""
+            failed = done["rationale"].map(is_failure)
+            human = done["classifier"].fillna("") == HUMAN_CLASSIFIER
+            labelled = done[(tried & ~failed) | human]
             already = set(map(tuple, labelled[list(schema.KEY_COLUMNS)].values))
 
     for repo in repos:

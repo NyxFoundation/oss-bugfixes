@@ -5,7 +5,18 @@ import time
 from dataclasses import dataclass, field, asdict
 from typing import Any, Protocol, Sequence
 
-__all__ = ["Verdict", "Classifier", "ClassifyError", "CommitView"]
+__all__ = ["Verdict", "Classifier", "ClassifyError", "CommitView",
+           "FAILURE_PREFIX", "is_failure"]
+
+#: Marks a row whose classifier never got an answer, as opposed to one whose
+#: classifier looked and declined. Both record `is_bugfix=None`, and the
+#: difference decides whether a rerun should try again: a declined row is a
+#: result, a failed row is work still owed.
+FAILURE_PREFIX = "[not classified]"
+
+
+def is_failure(rationale: object) -> bool:
+    return isinstance(rationale, str) and rationale.startswith(FAILURE_PREFIX)
 
 
 class ClassifyError(RuntimeError):
@@ -67,7 +78,7 @@ class Verdict:
         d = asdict(self)
         err = d.pop("error", "") or ""
         if err and not (d.get("rationale") or "").strip():
-            d["rationale"] = f"[not classified] {err}"[:1000]
+            d["rationale"] = f"{FAILURE_PREFIX} {err}"[:1000]
         return d
 
 

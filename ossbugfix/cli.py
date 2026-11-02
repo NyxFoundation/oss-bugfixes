@@ -107,6 +107,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--api-key", default="")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--batch", type=int, default=50)
+    p.add_argument("--max-tokens", type=int, default=4000,
+                   help="reply budget. A reasoning model that runs out emits "
+                        "nothing at all, so this failing looks like a refusal")
     p.add_argument("--min-signals", type=int, default=0)
     p.add_argument("--limit-per-repo", type=int, default=0)
     p.add_argument("--no-diffs", action="store_true",
@@ -233,7 +236,7 @@ def _walk_cfg(args: argparse.Namespace) -> walk.WalkConfig:
 
 def _engine(args: argparse.Namespace):
     kwargs: dict = {}
-    for name in ("model", "base_url", "api_key", "workers"):
+    for name in ("model", "base_url", "api_key", "workers", "max_tokens"):
         val = getattr(args, name, None)
         if val:
             kwargs[name] = val

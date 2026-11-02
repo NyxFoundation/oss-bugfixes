@@ -142,3 +142,32 @@ def test_classify_does_not_redo_already_classified_commits(mirrored, commit_to_s
     assert second.rows == 1, "only the new commit should reach the classifier"
     df = Sink(d).read()
     assert len(df) == first.rows + 1
+
+
+def test_a_failed_classification_is_retried_but_a_declined_one_is_not(mirrored):
+    """Both record is_bugfix=None, and the difference decides whether a rerun
+    owes them work. 2,375 rows that died on a token limit became permanently
+    unclassifiable because every rerun skipped them: something had once tried.
+    """
+    from ossbugfix.classify.base import Verdict
+    from ossbugfix.sink import Sink
+
+    d = mirrored.domain
+    pipeline.run_walk(d, [mirrored], workers=1, quiet=True)
+    pipeline.run_signals(d, [mirrored], workers=1, quiet=True)
+
+    sink = Sink(d)
+    frame = pd.read_parquet(paths.candidates_dir(d) / f"{mirrored.slug}.parquet")
+    rows = schema.conform(frame, schema.BUGFIX_COLUMNS)
+    # One row the engine declined, one the endpoint never answered for.
+    rows.loc[rows.index[0], ["classifier", "rationale"]] = \
+        ["llm:openai", "no deterministic signal fired"]
+    rows.loc[rows.index[1:], ["classifier", "rationale"]] = \
+        ["llm:openai", Verdict(error="HTTP 403: error code: 1010").as_row()["rationale"]]
+    sink.merge(rows)
+
+    from ossbugfix import classify as classify_mod
+    rep = pipeline.run_classify(d, [mirrored], classify_mod.get("heuristic"),
+                                quiet=True)
+    assert rep.rows == len(rows) - 1, \
+        "the declined row is a result; every failed row is still owed"

@@ -173,7 +173,7 @@ class LLMClassifier(Classifier):
                  base_url: str = "", api_key: str = "",
                  timeout: int = DEFAULT_TIMEOUT, workers: int = 4,
                  diff_chars: int = 6_000, strip_comments: bool = True,
-                 cache_path: Path | None = None,
+                 max_tokens: int = 4_000, cache_path: Path | None = None,
                  **_: object) -> None:
         self.backend = backend or "claude"
         self.model = model
@@ -181,6 +181,7 @@ class LLMClassifier(Classifier):
         self.workers = max(1, int(workers))
         self.diff_chars = diff_chars
         self.strip_comments = strip_comments
+        self.max_tokens = max_tokens
         self.base_url = base_url or _default_base_url(self.backend)
         self.api_key = api_key or _default_api_key(self.backend)
         self._cache_path = Path(cache_path) if cache_path else None
@@ -287,10 +288,12 @@ class LLMClassifier(Classifier):
             "messages": [{"role": "system", "content": SYSTEM},
                          {"role": "user", "content": prompt}],
             "temperature": 0,
-            # Reasoning models spend budget before they emit any content. At
-            # 700 a long chain of thought left `content` empty on roughly a
-            # third of commits, which arrived as "unparseable reply: \'\'".
-            "max_tokens": 1_600,
+            # Reasoning models spend budget before they emit any content, and
+            # the failure is silent: `content` comes back empty, or the JSON
+            # arrives truncated mid-object. Measured on 5,607 commits with
+            # glm-5.3-flash at 1,600: 1,422 empty replies and 107 truncated
+            # ones, a quarter of the corpus lost to a number.
+            "max_tokens": self.max_tokens,
         }
         headers = {"Content-Type": "application/json"}
         if self.api_key:
@@ -335,7 +338,13 @@ class LLMClassifier(Classifier):
                 return json.loads(r.read().decode("utf-8", "replace"))
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", "replace")[:200]
-            if exc.code in (408, 409, 429, 500, 502, 503, 504, 529):
+            # 403 is normally "you may not", but Cloudflare in front of an
+            # inference endpoint returns `error code: 1010` for rate limiting,
+            # where the right answer is to wait rather than to give up. 812
+            # commits were dropped on that distinction.
+            retryable = exc.code in (408, 409, 429, 500, 502, 503, 504, 529) or (
+                exc.code == 403 and "1010" in body)
+            if retryable:
                 raise _Retryable(f"HTTP {exc.code}: {body}",
                                  exc.headers.get("Retry-After")) from exc
             raise ClassifyError(f"HTTP {exc.code}: {body}") from exc
