@@ -25,7 +25,7 @@ import pandas as pd
 #: incremental stage refuses to append across a bump and re-walks instead,
 #: because a frame whose rows were made two different ways is worse than a
 #: frame that took longer to build.
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 
 # --- one row per commit, straight from git ---------------------------------
 COMMIT_COLUMNS: list[str] = [
@@ -47,6 +47,13 @@ COMMIT_COLUMNS: list[str] = [
     "touches_source",   # bool: at least one path looks like source code
     "is_revert",        # bool: conventional revert commit
     "languages",        # space-separated, inferred from file extensions
+    # Facts from git, not from the signal pass — computed by the walk out of
+    # `git patch-id`. They lived in SIGNAL_COLUMNS until v2, which meant the
+    # walk's `conform()` dropped the single most expensive thing it computes:
+    # 702 detected backports in openzeppelin-contracts were discarded between
+    # being counted and being written.
+    "is_backport",      # <NA> when detection was skipped — never False
+    "n_patch_siblings", # how many shas share this commit's patch-id
 ]
 
 # --- deterministic signals, computed without a model -----------------------
@@ -56,8 +63,6 @@ SIGNAL_COLUMNS: list[str] = [
     "fix_verb",         # the matched fix verb, "" if none
     "impact_class",     # panic | overflow | oob | auth | leak | dos | ...
     "keyword_score",    # 0.0-1.0, weighted security vocabulary match
-    "is_backport",      # <NA> when detection was skipped — never False
-    "n_patch_siblings", # how many shas share this commit's patch-id
     "n_signals",        # how many independent signals fired
     "prefilter",        # keep | drop:<reason>
 ]

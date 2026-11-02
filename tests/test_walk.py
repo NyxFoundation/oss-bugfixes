@@ -88,3 +88,32 @@ def test_missing_mirror_is_an_error_not_an_empty_frame(mirrored):
     shutil.rmtree(mirror_mod.mirror_path(mirrored))
     res = walk.walk(mirrored)
     assert not res.ok and "mirror" in res.error
+
+
+def test_detected_backports_survive_into_the_written_frame(mirrored, tmp_path):
+    """The walk's most expensive computation must not be dropped on the way out.
+
+    `is_backport` and `n_patch_siblings` come from `git patch-id`, which costs
+    a full diff render of the history. They lived in SIGNAL_COLUMNS until
+    schema v2, so the walk's own `conform()` discarded them — 702 detected
+    backports in openzeppelin-contracts were counted and then thrown away
+    before anything could read them.
+    """
+    from ossbugfix import pipeline, schema
+
+    assert "is_backport" in schema.COMMIT_COLUMNS, \
+        "a git fact belongs with the git facts, or conform() will drop it"
+    assert "is_backport" not in schema.SIGNAL_COLUMNS
+
+    res = walk.walk(mirrored, walk.WalkConfig(detect_backports=True))
+    assert res.ok
+    conformed = schema.conform(res.frame, schema.COMMIT_COLUMNS)
+    assert "is_backport" in conformed.columns
+    assert "n_patch_siblings" in conformed.columns
+
+    pipeline.run_walk(mirrored.domain, [mirrored], workers=1, quiet=True)
+    from ossbugfix import paths
+    import pandas as pd
+    written = pd.read_parquet(paths.commits_dir(mirrored.domain) / f"{mirrored.slug}.parquet")
+    assert "is_backport" in written.columns, "the column was lost on write"
+    assert "n_patch_siblings" in written.columns
