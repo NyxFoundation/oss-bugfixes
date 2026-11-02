@@ -113,7 +113,16 @@ def ssl_context() -> ssl.SSLContext:
     return ctx
 
 DEFAULT_TIMEOUT = int(os.environ.get("OSS_BUGFIXES_LLM_TIMEOUT", "180"))
+#: Attempts for an ordinary transient error.
 MAX_RETRIES = 4
+#: Attempts when the endpoint is RATE LIMITING rather than failing. These are
+#: different problems and were being retried the same way: four tries over
+#: fifteen seconds is nothing against a limiter whose window is a minute, so
+#: 812 commits were recorded as unclassifiable for being asked too quickly.
+MAX_RATE_RETRIES = 8
+#: Waits for the rate-limited ladder, in seconds. Capped rather than doubling
+#: forever, because a sweep that sleeps five minutes per commit has stopped.
+RATE_BACKOFF = (5, 15, 30, 45, 60, 60, 90, 120)
 
 SYSTEM = (
     "You are a security engineer triaging commits from an open-source repository. "
@@ -252,7 +261,8 @@ class LLMClassifier(Classifier):
 
     def _call(self, prompt: str) -> str:
         last: Exception | None = None
-        for attempt in range(MAX_RETRIES):
+        attempt = rate_attempt = 0
+        while True:
             try:
                 if self.backend == "claude":
                     return self._call_claude(prompt)
@@ -261,8 +271,20 @@ class LLMClassifier(Classifier):
                 return self._call_openai(prompt)
             except _Retryable as exc:
                 last = exc
+                if exc.rate_limited:
+                    if rate_attempt >= MAX_RATE_RETRIES:
+                        raise ClassifyError(
+                            f"rate limited through {MAX_RATE_RETRIES} waits "
+                            f"totalling {sum(RATE_BACKOFF)}s: {last}") from exc
+                    _sleep(exc.retry_after
+                           or RATE_BACKOFF[min(rate_attempt, len(RATE_BACKOFF) - 1)])
+                    rate_attempt += 1
+                    continue
+                if attempt >= MAX_RETRIES - 1:
+                    raise ClassifyError(
+                        f"gave up after {MAX_RETRIES} attempts: {last}") from exc
                 _backoff(attempt, exc.retry_after)
-        raise ClassifyError(f"gave up after {MAX_RETRIES} attempts: {last}")
+                attempt += 1
 
     def _call_claude(self, prompt: str) -> str:
         args = ["claude", "-p", "--output-format", "text"]
@@ -342,9 +364,12 @@ class LLMClassifier(Classifier):
             # inference endpoint returns `error code: 1010` for rate limiting,
             # where the right answer is to wait rather than to give up. 812
             # commits were dropped on that distinction.
-            retryable = exc.code in (408, 409, 429, 500, 502, 503, 504, 529) or (
-                exc.code == 403 and "1010" in body)
-            if retryable:
+            limited = exc.code in (429, 503) or (exc.code == 403 and "1010" in body)
+            if limited:
+                raise _Retryable(f"HTTP {exc.code}: {body}",
+                                 exc.headers.get("Retry-After"),
+                                 rate_limited=True) from exc
+            if exc.code in (408, 409, 500, 502, 504, 529):
                 raise _Retryable(f"HTTP {exc.code}: {body}",
                                  exc.headers.get("Retry-After")) from exc
             raise ClassifyError(f"HTTP {exc.code}: {body}") from exc
@@ -486,18 +511,26 @@ def _clean_cwe(v: Any) -> str:
 
 
 class _Retryable(Exception):
-    def __init__(self, msg: str, retry_after: str | None = None) -> None:
+    def __init__(self, msg: str, retry_after: str | None = None, *,
+                 rate_limited: bool = False) -> None:
         super().__init__(msg)
         self.retry_after = retry_after
+        #: Being told to slow down is not the same as failing, and the two
+        #: want different patience.
+        self.rate_limited = rate_limited
+
+
+def _sleep(seconds: object) -> None:
+    try:
+        time.sleep(min(180.0, float(seconds)))     # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        time.sleep(30.0)
 
 
 def _backoff(attempt: int, retry_after: str | None) -> None:
     if retry_after:
-        try:
-            time.sleep(min(60.0, float(retry_after)))
-            return
-        except (TypeError, ValueError):
-            pass
+        _sleep(retry_after)
+        return
     time.sleep(min(60.0, 2.0 ** attempt))
 
 

@@ -111,3 +111,47 @@ def test_json_is_recovered_from_a_reasoning_channel():
             '{"is_bugfix": true, "is_security_fix": true, "confidence": 0.8}')
     obj = _extract_json(text)
     assert obj is not None and obj["is_bugfix"] is True
+
+
+def test_rate_limiting_and_failing_get_different_patience():
+    """Being told to slow down is not the same as failing. Four tries over
+    fifteen seconds is nothing against a limiter whose window is a minute, and
+    812 commits were recorded as unclassifiable for being asked too quickly."""
+    from ossbugfix.classify.llm import (MAX_RATE_RETRIES, MAX_RETRIES,
+                                        RATE_BACKOFF, _Retryable)
+
+    assert MAX_RATE_RETRIES > MAX_RETRIES
+    assert sum(RATE_BACKOFF) >= 300, "the ladder must outlast a minute-long window"
+    assert _Retryable("x", rate_limited=True).rate_limited is True
+    assert _Retryable("x").rate_limited is False
+
+
+def test_cloudflare_1010_is_read_as_a_rate_limit_not_a_refusal():
+    """403 normally means "you may not". In front of an inference endpoint it
+    also carries `error code: 1010`, which means "not so fast"."""
+    import urllib.error
+    from ossbugfix.classify.llm import LLMClassifier, _Retryable
+
+    eng = LLMClassifier(backend="openai", base_url="http://x/v1", model="m")
+
+    class _Resp:
+        headers: dict[str, str] = {}
+
+        def read(self) -> bytes:
+            return b"error code: 1010"
+
+    def boom(*a: object, **k: object):
+        raise urllib.error.HTTPError("u", 403, "Forbidden", _Resp.headers, _Resp())  # type: ignore[arg-type]
+
+    import urllib.request
+    original = urllib.request.urlopen
+    urllib.request.urlopen = boom           # type: ignore[assignment]
+    try:
+        raised: _Retryable | None = None
+        try:
+            eng._post("http://x/v1/chat/completions", {}, {})
+        except _Retryable as exc:
+            raised = exc
+        assert raised is not None and raised.rate_limited is True
+    finally:
+        urllib.request.urlopen = original   # type: ignore[assignment]
