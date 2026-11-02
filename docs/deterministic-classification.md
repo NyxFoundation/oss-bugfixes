@@ -41,11 +41,16 @@ heuristics. That is not an accident, as the measurements below show.
 
 ## What was built here
 
-[`lean/OssBugfix`](../lean/OssBugfix) is a deterministic classifier in Lean 4:
-a total parser from unified-diff text to a `Diff`, a tokenizer, ten structural
-edit detectors, and a three-valued verdict. It compiles to a native binary with
-**no dependencies beyond the bare toolchain** — no mathlib, no package index —
-and is wired in as `--engine lean`.
+Two implementations of the same classifier — a total parser from unified-diff
+text, a tokenizer, ten structural edit detectors, and a three-valued verdict:
+
+| engine | language | guarantee |
+|---|---|---|
+| `--engine structural` | typed Python, `mypy --strict` | verdict rules **proved** over their finite space (Z3 + exhaustive execution + a model/code link); parser properties tested with Hypothesis |
+| `--engine lean` | Lean 4, no mathlib | the same rules plus parser totality as theorems over the **unbounded** space |
+
+[`docs/verification.md`](verification.md) draws the line between those two
+precisely.
 
 The detectors answer questions about what an author *did*, never about what
 they *said*: a `require` inserted into existing code, one comparison operator
@@ -53,10 +58,10 @@ swapped in one line, `unchecked` removed, a reentrancy guard added. Keying any
 of them on commit wording would reintroduce exactly the blind spot this corpus
 exists to remove.
 
-### Why Lean, and not more Python
+### Lean first, then typed Python — and the measurement that settled it
 
-The README states five honesty rules. Everywhere else they are kept by review
-and by tests over the inputs somebody thought of. In
+Lean came first, because the README states five honesty rules that everywhere
+else are kept by review and by tests over the inputs somebody thought of. In
 [`Props.lean`](../lean/OssBugfix/Props.lean) three of them are theorems,
 checked by the compiler over every input there is:
 
@@ -74,6 +79,28 @@ matters more than it sounds: a classifier that can diverge on some input
 silently drops commits, and a dropped commit is indistinguishable from one that
 was examined and rejected.
 
+**Then the same core was written in typed Python, and the comparison was not
+close.** Both engines over the same 5,607 commits (97 MB of diffs), same host:
+
+| | throughput | agreement |
+|---|---:|---:|
+| `structural` (typed Python, in-process) | **107 commits/sec** | — |
+| `lean` (compiled binary, piped) | 56 commits/sec | **5,607 / 5,607 = 100.000%** |
+
+The compiled language is the slower one, by roughly two. Not because Lean is
+slow: the Python runs in-process while the Lean path pays for a 97 MB payload
+through a pipe, and the Lean parser accumulates hunk lines with `++`, which is
+quadratic where Python's list append is not. Both are fixable; neither was
+worth fixing once the verdicts agreed exactly.
+
+What that leaves is a maintenance question rather than a performance one. Two
+copies of ten detectors in two languages will drift —
+`tests/test_engine_parity.py` exists to notice — and the second copy buys one
+property the first cannot have: proof of parser totality over an infinite
+input space. For a component whose measured value is a 14% pre-filter, the
+typed-Python core is the better trade, and `--engine structural` is the
+recommendation. The Lean package stays as the stronger reference.
+
 ## What it measures
 
 2,418 commits from `solmate`, `permit2`, `morpho-blue` and `safe-contracts`,
@@ -81,7 +108,7 @@ diffs served from hydrated local mirrors.
 
 | | |
 |---|---:|
-| throughput | **43 commits/sec** (2,418 in 56 s, single process) |
+| throughput | **107 commits/sec** (typed Python); 43–56 via the Lean binary |
 | hosted model, same corpus | ~0.25 commits/sec |
 | provably refuted (no token changed) | **346 (14%)** |
 | abstained (`null`, handed on) | **1,876 (78%)** |
@@ -160,7 +187,7 @@ the next piece of work, and it is the piece the literature says actually pays.
 
 ## Should the Python be rewritten in Lean?
 
-No, and the reason is not taste.
+No, and the measurement above is only half the reason.
 
 | stage | dominated by | Lean would |
 |---|---|---|
@@ -168,7 +195,7 @@ No, and the reason is not taste.
 | walk | `git log` output, streamed | change nothing; would lose pandas/parquet |
 | signals | a pandas pass over a frame | be slower to write, no faster to run |
 | diffs | git object reads | change nothing |
-| classify | **the decision rule** | **already done — this is `lean/`** |
+| classify | **the decision rule** | **the part worth verifying — done twice, see above** |
 | sink | CSV merge, schema migration | lose the ecosystem that makes migration cheap |
 
 Four of six stages are I/O-bound on `git`, and the two that are not depend on
@@ -177,5 +204,7 @@ trade a working pipeline for a worse one, in exchange for proofs about code
 whose correctness is not where the risk lives.
 
 The risk lives in the *decision rule* — in whether a verdict is entitled to be
-asserted. That is the part now in Lean, and it is the part where a theorem is
-worth more than a test.
+asserted. That part is verified twice over, and the decisive observation is
+that **it is finite**: three booleans and a subset of ten signatures, 8,192
+inputs in total. Finite means a solver can exhaust it, which is why typed
+Python plus Z3 gives up nothing where the honesty rules actually live.

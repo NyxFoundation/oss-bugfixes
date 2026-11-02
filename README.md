@@ -9,6 +9,8 @@
   <a href="https://github.com/NyxFoundation/oss-bugfixes/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/NyxFoundation/oss-bugfixes/actions/workflows/ci.yml/badge.svg"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white">
+  <img alt="mypy strict" src="https://img.shields.io/badge/mypy-strict-2A6DB2">
+  <img alt="Z3 verified" src="https://img.shields.io/badge/verdict%20rules-Z3%20verified-6E4C9F">
   <img alt="Lean 4" src="https://img.shields.io/badge/Lean-4.31-black?logo=lean&logoColor=white">
   <img alt="repositories tracked" src="https://img.shields.io/badge/repositories-345-success">
   <img alt="domains" src="https://img.shields.io/badge/domains-5-informational">
@@ -23,6 +25,7 @@
   <a href="docs/pipeline.md">Pipeline</a> ·
   <a href="docs/schema.md">Schema</a> ·
   <a href="docs/deterministic-classification.md">Classifying without a model</a> ·
+  <a href="docs/verification.md">Verification</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
 </p>
 
@@ -195,7 +198,8 @@ These are not style preferences; each one is a bug this lineage already shipped.
 
 | engine | needs | for |
 |---|---|---|
-| `lean` | the Lean toolchain | a deterministic pre-filter at **43 commits/sec** — see below |
+| `structural` | nothing | a deterministic pre-filter at **107 commits/sec** — see below |
+| `lean` | the Lean toolchain | the same classifier with unbounded proofs, 56 commits/sec |
 | `heuristic` | nothing | CI, baselines, and measuring what the model adds |
 | `llm:claude` | the `claude` CLI | interactive work |
 | `llm:openai` | any OpenAI-compatible endpoint | whole-corpus sweeps (Ollama Cloud, vLLM, LM Studio) |
@@ -204,22 +208,40 @@ These are not style preferences; each one is a bug this lineage already shipped.
 Replies are cached by `(model, prompt)`, so a rerun after a crash costs nothing
 for the part that finished. Adding an engine is one `register()` call.
 
-## The deterministic engine, and its honest limits
+## The deterministic engine, and what is actually proved about it
 
-[`lean/`](lean) holds a classifier written in Lean 4: a total diff parser, ten
-structural edit detectors, and a three-valued verdict, compiled to a native
-binary with no dependencies beyond the toolchain.
+[`ossbugfix/detect`](ossbugfix/detect) is a classifier with no model in it: a
+total diff parser, ten structural edit detectors, and a three-valued verdict.
 
-It is in Lean because three of the honesty rules above are **theorems** there
-rather than conventions — `security_needs_witness`, `refuted_is_silent`,
-`signatures_monotone` — checked by the compiler over every input, with no
-`sorry` in the package.
+The honesty rules above are not conventions here. The classifier's decision has
+a **finite** domain — three booleans read off the diff, times subsets of ten
+signatures, 8,192 inputs — so the rules are discharged over all of it, three
+independent ways:
 
-Measured on 2,418 smart-contract commits:
+```
+$ uv run python -m ossbugfix.detect.verify
+[exec] ran the real decide() over all 8,192 inputs: ok
+[z3]   8 properties proved unsat-of-negation
+[link] SMT model vs real decide(), all 8,192 points: agree
+VERIFIED
+```
+
+A positive verdict is also **unconstructable** without a witness:
+`Verdict.asserted()` takes the witnessing signatures as an argument, and
+`__post_init__` rejects any verdict asserting more than its evidence supports —
+so no such object exists anywhere in the process, not merely as a return value.
+
+The `[link]` step is the one that matters. A solver proves properties of the
+model you hand it, and the first time it ran it reported a disagreement between
+the SMT encoding and the code: Z3 had "proved" all eight properties of a model
+that did not describe the program. [`docs/verification.md`](docs/verification.md)
+draws the line between proved, tested, and merely believed.
+
+Measured on 5,607 smart-contract commits:
 
 | | |
 |---|---:|
-| throughput | **43 commits/sec** (vs ~0.25 for a hosted model) |
+| throughput | **107 commits/sec** (vs ~0.25 for a hosted model) |
 | provably refuted, needs no model ever | **14%** |
 | abstained and handed on | **78%** |
 
@@ -231,13 +253,19 @@ learns, instead of matching tokens.
 [`docs/deterministic-classification.md`](docs/deterministic-classification.md)
 has the numbers, the prior art and the GNN roadmap.
 
+A second implementation lives in [`lean/`](lean), where parser totality and
+monotonicity are theorems over the unbounded input space rather than
+properties under test. The two agree on 5,607 / 5,607 commits and
+`tests/test_engine_parity.py` keeps them that way.
+
 ## Documentation
 
 - [`docs/pipeline.md`](docs/pipeline.md) — each stage, its failure modes, what to do about them
 - [`docs/schema.md`](docs/schema.md) — every column, and what `<NA>` means in it
 - [`docs/adding-a-domain.md`](docs/adding-a-domain.md) — adding a domain or a repository
 - [`docs/corpora.md`](docs/corpora.md) — where the migrated corpora came from
-- [`docs/deterministic-classification.md`](docs/deterministic-classification.md) — classifying without a model: prior art, the Lean core, and what it does not do
+- [`docs/deterministic-classification.md`](docs/deterministic-classification.md) — classifying without a model: prior art, the measurements, and what it does not do
+- [`docs/verification.md`](docs/verification.md) — what is proved, what is tested, and where the line is
 - [`lean/README.md`](lean/README.md) — the Lean package itself
 
 ## Lineage

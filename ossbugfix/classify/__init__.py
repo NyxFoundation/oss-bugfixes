@@ -9,7 +9,7 @@ model without touching any other stage::
 
     oss-bugfixes classify --domain wallet --engine llm:claude
     oss-bugfixes classify --domain crypto --engine openai --model qwen3-coder
-    oss-bugfixes classify --domain os     --engine lean         # no model at all
+    oss-bugfixes classify --domain os     --engine structural   # no model at all
     oss-bugfixes classify --domain os     --engine heuristic    # message only
 
 Adding an engine is one `register()` call; nothing else in the framework needs
@@ -20,6 +20,7 @@ from __future__ import annotations
 from .base import Classifier, Verdict, ClassifyError
 from .heuristic import HeuristicClassifier
 from .lean import LeanClassifier
+from .structural import StructuralClassifier
 from .llm import LLMClassifier
 
 __all__ = ["Classifier", "Verdict", "ClassifyError", "get", "register", "available"]
@@ -51,3 +52,4 @@ def get(name: str, **kwargs) -> Classifier:
 register("heuristic", HeuristicClassifier)
 register("llm", LLMClassifier)
 register("lean", LeanClassifier)
+register("structural", StructuralClassifier)

@@ -28,6 +28,15 @@ jobs:
 
       # Offline: the fixtures build real git repositories in a tmpdir, so the
       # walk, diff and sink stages run against actual git behaviour.
+      # The classifier's decision rules are not conventions: their domain is
+      # finite, so they are discharged over all 8,192 inputs by Z3, by
+      # executing the real function, and by checking the two agree.
+      - name: Verify the verdict rules
+        run: uv run python -m ossbugfix.detect.verify
+
+      - name: Type-check the decision core
+        run: uv run python -m mypy --strict ossbugfix/detect/
+
       - name: Tests
         run: uv run python -m pytest -q
 
