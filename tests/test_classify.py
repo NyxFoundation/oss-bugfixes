@@ -54,8 +54,27 @@ def test_prompt_states_when_the_diff_is_missing():
 
 
 def test_prompt_marks_truncation():
-    p = build_prompt(view(diff="x" * 50_000), diff_chars=100)
+    """The fixture must be a real diff: the prompt builder strips comments
+    first, and a 50,000-character blob with no +/- markers is not a diff at
+    all — it reports as "no code changed", not as a truncated one."""
+    body = "--- a/A.sol\n+++ b/A.sol\n@@ -1,9999 +1,9999 @@\n" + \
+           "\n".join(f"+    uint256 x{i} = {i};" for i in range(2_000))
+    p = build_prompt(view(diff=body), diff_chars=200)
     assert "[truncated]" in p
+
+
+def test_prompt_hides_comments_from_the_model():
+    """A model that cannot see a comment cannot be fooled by one — the
+    solmate "Comment fixes" failure."""
+    body = ("--- a/A.sol\n+++ b/A.sol\n@@ -1,3 +1,3 @@\n"
+            "     mstore(add(callData, 36), amount)\n"
+            "-    // We use 100 because the calldata length is 4 + 32 * 2.\n"
+            "+    // We use 68 because the calldata length is 4 + 32 * 2.\n"
+            "     let s := call(gas(), token, 0, callData, 68, 0, 0)\n")
+    p = build_prompt(view(diff=body))
+    assert "We use 100" not in p and "We use 68" not in p
+    assert "no code changed" in p
+    assert "comments removed" in p
 
 
 def test_prompt_passes_signals_through():

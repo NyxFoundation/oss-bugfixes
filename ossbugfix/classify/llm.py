@@ -15,6 +15,15 @@ development artifacts plus light structural context, answered as a single JSON
 object. Chain-of-thought is requested in a `rationale` field rather than as
 free text before the JSON, so a truncated reply still parses.
 
+The diff handed over is **code only**: comment-only lines are dropped and
+trailing comments cut before the prompt is built. A model reads a diff as
+text, and a diff's text contains sentences the author wrote about the code —
+the one channel this corpus has decided not to trust. Leaving them in is how a
+model came to report "corrects the calldata length constants … fixing a
+functional bug" for a commit that changed twenty-four comment lines and no
+code. It also removes about a third of the prompt, which is the other thing
+that was wrong with the sweep.
+
 Two things this module refuses to do:
 
   * **invent a verdict when the model failed.** A timeout, a refusal, or
@@ -127,7 +136,7 @@ Files changed ({n_files}), +{insertions}/-{deletions}:
 Deterministic signals already computed (these are hints, not conclusions):
 {signals}
 
-Diff:
+Diff (comments removed — judge the code, the author's prose is not evidence):
 ```diff
 {diff}
 ```
@@ -163,13 +172,15 @@ class LLMClassifier(Classifier):
     def __init__(self, *, backend: str = "claude", model: str = "",
                  base_url: str = "", api_key: str = "",
                  timeout: int = DEFAULT_TIMEOUT, workers: int = 4,
-                 diff_chars: int = 6_000, cache_path: Path | None = None,
+                 diff_chars: int = 6_000, strip_comments: bool = True,
+                 cache_path: Path | None = None,
                  **_: object) -> None:
         self.backend = backend or "claude"
         self.model = model
         self.timeout = timeout
         self.workers = max(1, int(workers))
         self.diff_chars = diff_chars
+        self.strip_comments = strip_comments
         self.base_url = base_url or _default_base_url(self.backend)
         self.api_key = api_key or _default_api_key(self.backend)
         self._cache_path = Path(cache_path) if cache_path else None
@@ -197,7 +208,8 @@ class LLMClassifier(Classifier):
     # --- public API --------------------------------------------------------
 
     def classify(self, view: CommitView) -> Verdict:
-        prompt = build_prompt(view, diff_chars=self.diff_chars)
+        prompt = build_prompt(view, diff_chars=self.diff_chars,
+                              strip_comments=self.strip_comments)
         key = _cache_key(self.backend, self.model, prompt)
         with self._lock:
             hit = self._cache.get(key)
@@ -348,12 +360,22 @@ class LLMClassifier(Classifier):
 
 # --- prompt -----------------------------------------------------------------
 
-def build_prompt(view: CommitView, *, diff_chars: int = 6_000) -> str:
+def build_prompt(view: CommitView, *, diff_chars: int = 6_000,
+                 strip_comments: bool = True) -> str:
     files = "\n".join(f"  {f}" for f in list(view.files)[:40])
     if len(view.files) > 40:
         files += f"\n  … and {len(view.files) - 40} more"
     signals = _signal_lines(view)
-    diff = view.diff or "(diff unavailable — judge from the message and say so)"
+    diff = view.diff or ""
+    if diff and strip_comments:
+        from ..detect import code_only, has_code_change
+        # `code_only` keeps the file and hunk headers, so its output is never
+        # empty. Ask whether a CODE line survived, which is the real question.
+        diff = (code_only(diff) if has_code_change(diff)
+                else "(every changed line was a comment or blank — "
+                     "no code changed in this commit)")
+    if not diff:
+        diff = "(diff unavailable — judge from the message and say so)"
     if len(diff) > diff_chars:
         diff = diff[:diff_chars] + "\n… [truncated]"
     return PROMPT_TEMPLATE.format(

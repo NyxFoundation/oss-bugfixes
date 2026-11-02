@@ -380,11 +380,36 @@ def veto_unprovable_positives(views: Sequence[CommitView],
     return overridden
 
 
+def settle_cheaply(views: Sequence[CommitView]) -> dict[str, object]:
+    """Answer, with the structural engine, the commits it can answer for free.
+
+    This is what the deterministic engine is FOR. A commit whose diff changes
+    no code token needs no model: the refutation is a fact about the text, it
+    was right 67 times out of 67 where a model disagreed, and sending it to an
+    endpoint is time and money spent to be told something already known.
+
+    Returns {sha: Verdict} for the settled ones. Everything else is the
+    model's work.
+    """
+    from .classify.structural import StructuralClassifier
+    from .detect import classify as structural_classify
+    from .detect import parse as structural_parse
+
+    engine = StructuralClassifier()
+    settled: dict[str, object] = {}
+    for view in views:
+        if not view.diff:
+            continue
+        if structural_classify(structural_parse(view.diff)).ground.value in PROVABLE_REFUTATIONS:
+            settled[view.sha] = engine.classify(view)
+    return settled
+
+
 def run_classify(domain: str, repos: Sequence[Repo], classifier: Classifier, *,
                  min_signals: int = 0, limit_per_repo: int = 0, batch: int = 50,
                  with_diffs: bool = True, overwrite_human: bool = False,
                  skip_classified: bool = True, veto_trivial: bool = True,
-                 quiet: bool = False) -> StageReport:
+                 prefilter: bool = True, quiet: bool = False) -> StageReport:
     st = StageState(domain, Stage.CLASSIFY)
     rep = StageReport(Stage.CLASSIFY)
     sink = Sink(domain)
@@ -416,13 +441,26 @@ def run_classify(domain: str, repos: Sequence[Repo], classifier: Classifier, *,
         for start in range(0, len(df), batch):
             chunk = df.iloc[start:start + batch]
             views = [_view(repo, row, cache if with_diffs else None) for _, row in chunk.iterrows()]
+
+            # Hand the model only what the cheap engine could not settle.
+            settled: dict[str, object] = {}
+            to_model = views
+            if prefilter and with_diffs and classifier.name != "structural":
+                settled = settle_cheaply(views)
+                to_model = [v for v in views if v.sha not in settled]
+                if settled and not quiet:
+                    print(f"  [classify] {repo.slug}: {len(settled)} settled "
+                          f"without a model ({len(to_model)} left for it)")
             try:
-                verdicts = classifier.classify_many(views)
+                model_verdicts = classifier.classify_many(to_model) if to_model else []
             except Exception as exc:              # noqa: BLE001
                 rep.failed += 1
                 rep.notes.append(f"{repo.slug}: {type(exc).__name__}: {exc}")
                 print(f"  [classify] {repo.slug}: FAILED — {exc}", file=sys.stderr)
                 break
+            by_sha = dict(zip([v.sha for v in to_model], model_verdicts))
+            by_sha.update(settled)                      # type: ignore[arg-type]
+            verdicts = [by_sha[v.sha] for v in views]
             if veto_trivial and with_diffs:
                 n = veto_unprovable_positives(views, verdicts)
                 if n and not quiet:

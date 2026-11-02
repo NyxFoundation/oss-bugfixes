@@ -18,12 +18,14 @@ constructed at all, let alone returned.
 
 from .diff import Diff, Hunk, parse
 from .signature import Signature, detect, signatures, semantically_trivial, only_docs
+from .strip import StripStats, code_only, has_code_change, strip_line_comment
 from .tokens import tokens, tokens_of
 from .verdict import Ground, Verdict, classify
 
 __all__ = [
     "Diff", "Hunk", "parse",
     "Signature", "detect", "signatures", "semantically_trivial", "only_docs",
+    "code_only", "strip_line_comment", "has_code_change", "StripStats",
     "tokens", "tokens_of",
     "Ground", "Verdict", "classify",
 ]

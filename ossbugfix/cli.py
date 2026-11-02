@@ -115,6 +115,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="also re-run commits that already carry a verdict")
     p.add_argument("--overwrite-human", action="store_true",
                    help="let the model overwrite rows labelled by a human")
+    p.add_argument("--no-prefilter", action="store_true",
+                   help="send every commit to the model, including the ones "
+                        "the structural engine settles for free")
     p.add_argument("--no-veto", action="store_true",
                    help="do not let a provable refutation (no code token "
                         "changed) overrule a model's positive verdict")
@@ -207,7 +210,8 @@ def _dispatch(args: argparse.Namespace) -> int:
             limit_per_repo=args.limit_per_repo, batch=args.batch,
             with_diffs=not args.no_diffs, overwrite_human=args.overwrite_human,
             skip_classified=not args.reclassify,
-            veto_trivial=not args.no_veto, quiet=args.quiet)
+            veto_trivial=not args.no_veto,
+            prefilter=not args.no_prefilter, quiet=args.quiet)
     elif cmd == "run":
         return _cmd_run(args, repos)
     else:                                            # pragma: no cover
