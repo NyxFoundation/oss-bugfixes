@@ -58,6 +58,42 @@ swapped in one line, `unchecked` removed, a reentrancy guard added. Keying any
 of them on commit wording would reintroduce exactly the blind spot this corpus
 exists to remove.
 
+### Three failure surfaces, not one
+
+The first ten shapes were Solidity's, and that was a claim the corpus could
+not support. They fired on Solana and Move — 8 to 33% of commits — but on
+generic words like `assert` and `checked_add`, never on anything those
+ecosystems actually get wrong.
+
+**Solana** hands a program its accounts and makes it prove each one is what it
+claims. Nothing in the language does that for it, so a missing `is_signer`, a
+missing owner check, a non-canonical PDA bump, an unchecked CPI target, a
+close that drains lamports without zeroing the data, a missing discriminator,
+two account parameters that may alias — none has an EVM analogue, and none was
+being looked for.
+
+**Move** puts its failures in the type system, where a shape looking for a
+check will never see them. Granting a struct the `store` ability is how a
+resource becomes freely transferable by anyone holding it.
+
+**MEV** is not an ecosystem and not a memory-safety class. The code is correct
+for one caller and wrong once somebody else chooses when it runs: a swap with
+no minimum output is sandwichable for its whole price impact, a signed order
+with no deadline is held until it pays, a spot price read inside the
+transaction that moves it is not a price. Those five shapes are deliberately
+cross-ecosystem — the same mistake is made in Rust, Solidity and Move, and a
+detector reading only `.sol` would miss two thirds of it.
+
+Measured on real diffs, the ecosystems separate as they should:
+
+| repo | | new shapes fire | top |
+|---|---|---:|---|
+| kamino-klend | Solana | 46.5% | owner 30 · signer 22 · discriminator 21 |
+| raydium-clmm | Solana | 26.9% | pda_bump 34 · owner 27 |
+| orca-whirlpools | Solana | 17.0% | slippage 43 |
+| deepbook-v3 | Sui | 8.8% | ability_restricted 17 · deadline 13 |
+| uniswap-v3-core | EVM | 1.2% | near-silent, which is correct |
+
 ### Lean first, then typed Python — and the measurement that settled it
 
 Lean came first, because the README states five honesty rules that everywhere

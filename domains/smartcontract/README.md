@@ -5,7 +5,30 @@ and a defect in it puts value held by that deployment at risk. Node software
 belongs in [`../blockchain`](../blockchain); key custody in
 [`../wallet`](../wallet).
 
-## Coverage — 40 repositories
+## Coverage — 155 repositories
+
+| ecosystem | repos | language |
+|---|---:|---|
+| EVM | 95 | solidity 87 · vyper 4 |
+| Solana | 36 | rust |
+| Sui | 12 | move |
+| Aptos | 7 | move |
+| Starknet | 3 | cairo |
+
+`smart contract` is not one language, and the registry says so because the
+failure surfaces genuinely differ: a Solana program fails through account
+validation and PDA derivation, Move makes whole EVM bug classes
+unrepresentable while introducing its own around abilities and object
+ownership, and MEV — value extractable by whoever orders the transaction — is
+made identically in all three. See
+[`../../docs/deterministic-classification.md`](../../docs/deterministic-classification.md).
+
+Several entries are scoped with `paths:` to the part of a monorepo that is in
+scope — only 3,454 of `smartcontractkit/chainlink`'s 45,093 commits touch
+`contracts/`, and the rest are a Go node that belongs in `domains/blockchain`
+by this domain's own scope rule.
+
+## Original coverage — 40 repositories
 
 Two kinds of entry, mixed on purpose:
 

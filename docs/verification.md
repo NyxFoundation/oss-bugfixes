@@ -11,8 +11,34 @@ The classifier has two halves with completely different mathematics.
 
 | | domain | size | guarantee |
 |---|---|---|---|
-| **verdict algebra** — signatures → verdict | 3 booleans × subsets of 10 signatures | **8,192 inputs** | **proved**, two independent ways |
+| **verdict algebra** — signatures → verdict | 3 booleans × subsets of 27 signatures | 2^27 ≈ **1.07 billion**, collapsing to **40** | **proved**, two independent ways |
 | **parser & tokenizer** — diff text → signatures | arbitrary strings | infinite | **tested**, property-based |
+
+### What happened when the taxonomy grew
+
+At ten signatures the decision had 8,192 inputs and the exhaustive execution
+check really did run all of them. At twenty-seven it has 1.07 billion, and
+that check would have quietly become a sample while still being described as
+complete — which is exactly the kind of claim this page exists to stop.
+
+Enumeration turned out not to be needed. `decide` reads the signature set
+through exactly two predicates:
+
+```python
+any(s.bug_evidence for s in found)        # decides is_bugfix
+any(s.security_relevant for s in found)   # decides is_security_fix
+```
+
+so every subset answering those the same way is the same input. 2^27 collapses
+to four classes, and 8 × 4 = **40 inputs, enumerated completely**. Z3 is
+unaffected because it never enumerated: it proves over 27 symbolic booleans at
+once, which is why a solver keeps working where a loop stops.
+
+The reduction is checked, not assumed. `class_constancy()` draws hundreds of
+random subsets and insists every member of a class yields the same verdict. If
+a detector were ever wired into the decision some other way — reading a
+specific signature rather than the predicates — that fails *before* the
+enumeration claims a completeness it no longer has.
 
 The honesty rules all live in the first half. "A security verdict names its
 witness" is a statement about the verdict function, not about the parser. So
