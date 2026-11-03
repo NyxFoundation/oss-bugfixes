@@ -506,8 +506,15 @@ def distinct_signatures(d: Diff) -> list[Signature]:
 
 def hunk_trivial(h: Hunk) -> bool:
     """Did the tokens change at all? If not, the edit was comments, whitespace
-    or formatting — provably not a behaviour change."""
-    return tokens_of(h.removed) == tokens_of(h.added)
+    or formatting — provably not a behaviour change.
+
+    Compared over the hunk IN ORDER, context included, not over the removed
+    and added lists separately. A statement moved past unchanged context
+    produces identical removed and added token sequences while changing what
+    the code does; comparing the two renderings catches it, because the moved
+    token lands at a different index relative to the context around it.
+    """
+    return tokens_of(h.before) == tokens_of(h.after)
 
 
 def semantically_trivial(d: Diff) -> bool:

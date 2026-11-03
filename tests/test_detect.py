@@ -360,3 +360,55 @@ def test_the_verifier_still_covers_the_larger_taxonomy():
     checks that reduction rather than assuming it."""
     from ossbugfix.detect.verify import class_constancy
     assert class_constancy(trials=200) == []
+
+
+# --- a statement moved past unchanged context ------------------------------
+
+MOVED_PAST_CONTEXT = (
+    "--- a/ExchangeRouter.sol\n+++ b/ExchangeRouter.sol\n@@ -1,6 +1,6 @@\n"
+    "-        validateGasLeftForCallback(deposit.callbackGasLimit());\n"
+    "-\n"
+    "         bytes memory eventData = buildEventData();\n"
+    "+        validateGasLeftForCallback(deposit.callbackGasLimit());\n"
+    "+\n"
+    "         emit DepositExecuted(eventData);\n")
+
+
+def test_a_statement_moved_past_context_is_not_a_trivial_edit():
+    """GMX's "H-09, gasleft fix" moves a gas check after event-data creation.
+    The removed and added token sequences are IDENTICAL — only their position
+    relative to unchanged context moved — so comparing those two lists called
+    it `no_token_change` and refuted a real security fix.
+
+    `Hunk.lines` keeps the interleaving so the two renderings differ.
+    """
+    from ossbugfix.detect.signature import hunk_trivial
+    from ossbugfix.detect.tokens import tokens_of
+
+    d = parse(MOVED_PAST_CONTEXT)
+    h = d.hunks[0]
+    assert tokens_of(h.removed) == tokens_of(h.added), \
+        "the premise: separated lists cannot see the move"
+    assert hunk_trivial(h) is False
+    assert classify(d).ground is not Ground.NO_TOKEN_CHANGE
+
+
+def test_comment_and_whitespace_edits_are_still_refuted():
+    """The fix must not cost the one negative the classifier is entitled to."""
+    assert classify(parse(COMMENT)).ground is Ground.NO_TOKEN_CHANGE
+    ws = parse("--- a/A.sol\n+++ b/A.sol\n@@ -1,2 +1,2 @@\n"
+               "-  return   1;\n+  return 1;\n")
+    assert classify(ws).ground is Ground.NO_TOKEN_CHANGE
+
+
+def test_hunk_before_and_after_reconstruct_the_two_renderings():
+    h = parse(MOVED_PAST_CONTEXT).hunks[0]
+    # `text.split("\n")` leaves a trailing empty string, which parses as a
+    # blank context line — so index from the front, not the back.
+    assert h.before[0].strip().startswith("validateGasLeftForCallback")
+    assert [l.strip() for l in h.after if l.strip()][-1].startswith("emit DepositExecuted")
+    assert len(h.lines) == len(h.removed) + len(h.added) + len(h.context)
+    # The order is what matters: the moved statement sits at a different index
+    # in the two renderings, which is exactly what the separated lists lose.
+    assert h.before.index(h.before[0]) != h.after.index(
+        next(l for l in h.after if "validateGasLeftForCallback" in l))
