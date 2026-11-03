@@ -21,6 +21,59 @@ Two kinds of entry, mixed on purpose:
 By category: library 10 · dex 8 · lending 6 · bridge 5 · staking 4 · oracle 3 ·
 account 2 · marketplace 1 · framework 1. By tier: 17 / 13 / 10.
 
+## `data/bugfixes.csv` — 5,607 commits walked and classified
+
+Five repositories — `openzeppelin-contracts` (3,189 commits), `morpho-blue`
+(1,111), `safe-contracts` (705), `solmate` (338), `permit2` (264) — walked in
+full, every diff read, every commit classified.
+
+| | |
+|---|---:|
+| commits | **5,607** |
+| bug fixes | **1,182** |
+| security fixes | **672** |
+| severity | High 416 · Medium 195 · Low 40 · Critical 20 · Info 1 |
+| classified by | `llm:openai` 5,074 · `structural` 533 |
+| unclassified | **0** |
+
+### 95% of the security fixes are silent
+
+This is the measurement the whole repository is built to take:
+
+| of 672 security fixes | |
+|---|---:|
+| carrying a CVE / GHSA / RUSTSEC id | **8 (1.2%)** |
+| firing **no** deterministic signal at all | **637 (95%)** |
+
+A keyword crawl would have found about one in twenty. What the other
+nineteen look like:
+
+```
+feat: independent collateral                    High    CWE-840
+fix: lastUpdate issue                           High    CWE-682
+fix: minor issues                               Medium  CWE-193
+fix: Math.min                                   High    CWE-682
+fix: transfer direction, removing int casting   High    CWE-191
+feat: 0 amount liquidation and check bucket     Medium  CWE-129
+```
+
+Three of those are labelled `feat`. None mentions security. All were read as
+diffs, not as sentences.
+
+### The deterministic engine on this corpus
+
+Measured against the 5,062 model-decided rows
+([`scripts/evaluate_structural.py`](../../scripts/evaluate_structural.py)):
+
+| | precision | recall |
+|---|---:|---:|
+| `is_bugfix` | 0.46 | **1.00** |
+| `is_security_fix` | 0.34 | **0.97** |
+
+…while declining to judge 89% of them. High recall, low precision, mostly
+silent: a filter and a ranking, not a classifier. See
+[`../../docs/deterministic-classification.md`](../../docs/deterministic-classification.md).
+
 ## `data/vulns.parquet` — 4,470 expert-judged audit findings
 
 Migrated from

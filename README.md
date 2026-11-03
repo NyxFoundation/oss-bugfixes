@@ -14,7 +14,7 @@
   <img alt="Lean 4" src="https://img.shields.io/badge/Lean-4.31-black?logo=lean&logoColor=white">
   <img alt="repositories tracked" src="https://img.shields.io/badge/repositories-345-success">
   <img alt="domains" src="https://img.shields.io/badge/domains-5-informational">
-  <img alt="corpus rows" src="https://img.shields.io/badge/migrated%20corpus-41k%20rows-orange">
+  <img alt="corpus rows" src="https://img.shields.io/badge/corpus-41k%20migrated%20%2B%205.6k%20walked-orange">
 </p>
 
 <p align="center">
@@ -49,7 +49,17 @@ and free. `classify` is the only stage that needs a model.
 
 ## Why walk every commit instead of searching for "security"
 
-Because the commit worth reading usually does not say so.
+Because the commit worth reading usually does not say so — and now there is a
+number for it. Of the **672 security fixes** found across 5,607 smart-contract
+commits:
+
+| | |
+|---|---:|
+| carrying a CVE / GHSA / RUSTSEC id | **8 (1.2%)** |
+| firing **no** deterministic signal at all | **637 (95%)** |
+
+A keyword crawl finds about one in twenty. The other nineteen are titled
+`feat: independent collateral`, `fix: minor issues`, `fix: Math.min`.
 
 A keyword crawl decides what to look at from the words the author happened to
 choose, which is exactly the assumption a **silent fix** breaks. The commit that
@@ -105,7 +115,7 @@ One repository failing never takes down the run; `status` tells you what to retr
 
 | domain | repos | scope rule | past-vulnerability corpus |
 |---|---:|---|---|
-| [`smartcontract`](domains/smartcontract) | 40 | deployed on-chain code and the contract libraries it inherits | 4,470 audit findings |
+| [`smartcontract`](domains/smartcontract) | 40 | deployed on-chain code and the contract libraries it inherits | 4,470 audit findings · **5,607 commits walked** |
 | [`blockchain`](domains/blockchain) | 47 | node software, where a defect can halt or split a chain | 2,225 client fixes |
 | [`wallet`](domains/wallet) | 181 | anything whose defect costs funds, keys or signing authority | 34,526 wallet fixes |
 | [`os`](domains/os) | 35 | code running at a privilege the applications above cannot revoke | — |
