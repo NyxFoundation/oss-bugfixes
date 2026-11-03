@@ -235,3 +235,128 @@ def test_the_veto_leaves_a_real_fix_alone():
     verdict = Verdict(is_bugfix=True, is_security_fix=True, classifier="llm:openai")
     assert veto_unprovable_positives([view], [verdict]) == 0
     assert verdict.is_bugfix is True
+
+
+# --- Solana: an account is whatever the caller passed ----------------------
+
+SOLANA_SIGNER = (
+    "--- a/programs/x/src/lib.rs\n+++ b/programs/x/src/lib.rs\n@@ -10,3 +10,4 @@\n"
+    " pub fn withdraw(ctx: Context<Withdraw>) -> Result<()> {\n"
+    "+        require!(ctx.accounts.authority.is_signer, ErrorCode::Unauthorized);\n"
+    "         transfer(ctx, amount)\n }\n")
+SOLANA_PDA = (
+    "--- a/programs/x/src/state.rs\n+++ b/programs/x/src/state.rs\n@@ -5,3 +5,3 @@\n ctx\n"
+    "-    let addr = Pubkey::create_program_address(seeds, program_id)?;\n"
+    "+    let (addr, bump) = Pubkey::find_program_address(seeds, program_id);\n")
+SOLANA_CLOSE = (
+    "--- a/programs/x/src/close.rs\n+++ b/programs/x/src/close.rs\n@@ -3,3 +3,5 @@\n"
+    "     **acc.lamports.borrow_mut() = 0;\n"
+    "+    let mut data = acc.try_borrow_mut_data()?;\n"
+    "+    data.fill(0);\n")
+
+
+def test_a_missing_signer_check_is_a_solana_shape():
+    v = classify(parse(SOLANA_SIGNER))
+    assert Signature.SIGNER_CHECK_ADDED in v.sigs
+    assert v.is_security_fix is True
+
+
+def test_a_non_canonical_pda_bump_is_caught():
+    """`create_program_address` lets a caller supply a bump that derives a
+    second valid address for the same seeds."""
+    assert Signature.PDA_BUMP_CANONICALISED in classify(parse(SOLANA_PDA)).sigs
+
+
+def test_closing_without_zeroing_is_caught():
+    """Draining lamports leaves an account that can be topped back up and
+    reused inside the same transaction."""
+    assert Signature.ACCOUNT_CLOSE_HARDENED in classify(parse(SOLANA_CLOSE)).sigs
+
+
+# --- Move: the failures are in the type system -----------------------------
+
+MOVE_ABILITY = (
+    "--- a/sources/vault.move\n+++ b/sources/vault.move\n@@ -2,3 +2,3 @@\n ctx\n"
+    "-    struct Receipt has key, store, drop {\n"
+    "+    struct Receipt has key {\n")
+MOVE_CAP = (
+    "--- a/sources/admin.move\n+++ b/sources/admin.move\n@@ -4,3 +4,4 @@\n"
+    "     public fun set_fee(cfg: &mut Config, bps: u64) {\n"
+    "+        assert!(exists<AdminCap>(signer::address_of(s)), E_NOT_ADMIN);\n"
+    "         cfg.fee = bps;\n")
+
+
+def test_removing_the_store_ability_is_a_containment_fix():
+    """Granting `store` is how a resource becomes freely transferable by
+    anyone holding it. Removing one is not a refactor."""
+    v = classify(parse(MOVE_ABILITY))
+    assert Signature.ABILITY_RESTRICTED in v.sigs
+    assert Signature.ABILITY_RESTRICTED.bug_evidence is False, \
+        "tightening the type system is a surface change, not proof of a defect"
+
+
+def test_a_capability_requirement_is_a_move_shape():
+    assert Signature.CAPABILITY_CHECK_ADDED in classify(parse(MOVE_CAP)).sigs
+
+
+# --- MEV: correct for one caller, wrong once somebody chooses the ordering --
+
+MEV_SLIPPAGE = (
+    "--- a/programs/amm/src/swap.rs\n+++ b/programs/amm/src/swap.rs\n@@ -8,3 +8,4 @@\n"
+    "     let out = compute_out(amount_in)?;\n"
+    "+    require!(out >= min_amount_out, ErrorCode::SlippageExceeded);\n"
+    "     transfer_out(out)\n")
+MEV_DEADLINE = (
+    "--- a/contracts/Router.sol\n+++ b/contracts/Router.sol\n@@ -3,3 +3,4 @@\n"
+    "     function swap(Order calldata o) external {\n"
+    "+        require(block.timestamp <= o.deadline, \"expired\");\n"
+    "         _fill(o);\n")
+MEV_STALENESS = (
+    "--- a/contracts/Oracle.sol\n+++ b/contracts/Oracle.sol\n@@ -5,3 +5,4 @@\n"
+    "         (, int256 answer, , uint256 updatedAt, ) = feed.latestRoundData();\n"
+    "+        require(block.timestamp - updatedAt <= maxAge, \"stale\");\n"
+    "         return answer;\n")
+
+
+def test_a_slippage_bound_is_an_mev_fix():
+    """Without a minimum output the trade is sandwichable for the whole of its
+    price impact, and no access-control shape sees that."""
+    v = classify(parse(MEV_SLIPPAGE))
+    assert Signature.SLIPPAGE_BOUND_ADDED in v.sigs
+    assert v.is_security_fix is True
+
+
+def test_a_deadline_is_an_mev_fix():
+    """A signed order with no expiry is held until the moment it pays."""
+    assert Signature.DEADLINE_ADDED in classify(parse(MEV_DEADLINE)).sigs
+
+
+def test_an_oracle_staleness_check_is_an_mev_fix():
+    assert Signature.ORACLE_STALENESS_CHECKED in classify(parse(MEV_STALENESS)).sigs
+
+
+def test_mev_shapes_are_not_confined_to_one_ecosystem():
+    """The same mistake is made in Rust, in Solidity and in Move. A detector
+    that only looked at .sol would miss two thirds of it."""
+    from ossbugfix.detect.signature import ecosystem_of
+    assert ecosystem_of("programs/amm/src/swap.rs") == "solana"
+    assert ecosystem_of("sources/pool.move") == "move"
+    assert ecosystem_of("contracts/Router.sol") == "evm"
+    assert Signature.SLIPPAGE_BOUND_ADDED in classify(parse(MEV_SLIPPAGE)).sigs  # .rs
+    assert Signature.DEADLINE_ADDED in classify(parse(MEV_DEADLINE)).sigs        # .sol
+
+
+def test_ecosystem_shapes_do_not_fire_on_the_wrong_ecosystem():
+    """A Solidity diff must not produce Solana account shapes."""
+    v = classify(parse(GUARD))
+    solana = {Signature.SIGNER_CHECK_ADDED, Signature.PDA_BUMP_CANONICALISED,
+              Signature.DISCRIMINATOR_CHECKED}
+    assert not (set(v.sigs) & solana)
+
+
+def test_the_verifier_still_covers_the_larger_taxonomy():
+    """27 signatures is 2^27 subsets — not enumerable. The decision reads the
+    set through two predicates, so the classes are, and `class_constancy`
+    checks that reduction rather than assuming it."""
+    from ossbugfix.detect.verify import class_constancy
+    assert class_constancy(trials=200) == []

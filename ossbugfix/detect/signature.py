@@ -14,7 +14,7 @@ defect fix.
 from __future__ import annotations
 
 import enum
-from typing import Final, Sequence
+from typing import Callable, Final, Sequence
 
 from .diff import Diff, Hunk
 from .tokens import (Tok, introduced, mentions, mentions_any, removed_toks,
@@ -52,6 +52,74 @@ class Signature(enum.Enum):
     #: A reentrancy guard appeared.
     REENTRANCY_GUARD_ADDED = "reentrancy_guard_added"
 
+    # ---- Solana: the account model, not the call stack --------------------
+    # A Solana program is handed accounts by the caller and must prove each one
+    # is what it claims. Nothing in the language enforces that, so the whole
+    # class of "forgot to check" has no EVM analogue.
+
+    #: A `Signer<'_>` / `is_signer` requirement appeared where the account was
+    #: previously taken unauthenticated.
+    SIGNER_CHECK_ADDED = "signer_check_added"
+    #: An owner check appeared — the account must belong to the expected
+    #: program. Without it a caller substitutes an account they control.
+    OWNER_CHECK_ADDED = "owner_check_added"
+    #: An Anchor `#[account(...)]` constraint appeared: `has_one`, `constraint`,
+    #: `seeds`, `address`.
+    ACCOUNT_CONSTRAINT_ADDED = "account_constraint_added"
+    #: A PDA derivation gained its canonical bump, or moved off
+    #: `create_program_address` onto `find_program_address`. A non-canonical
+    #: bump lets a caller derive a second valid address for the same seeds.
+    PDA_BUMP_CANONICALISED = "pda_bump_canonicalised"
+    #: The target of a CPI started being checked against an expected program
+    #: id, closing arbitrary-CPI.
+    CPI_TARGET_CHECKED = "cpi_target_checked"
+    #: Account closing was hardened — lamports drained AND data zeroed or the
+    #: discriminator poisoned, so the account cannot be revived in the same
+    #: transaction.
+    ACCOUNT_CLOSE_HARDENED = "account_close_hardened"
+    #: A discriminator or account-type check appeared, closing type cosplay.
+    DISCRIMINATOR_CHECKED = "discriminator_checked"
+    #: Two account parameters started being compared, closing the
+    #: duplicate-mutable-account aliasing bug.
+    DUPLICATE_ACCOUNT_CHECKED = "duplicate_account_checked"
+
+    # ---- Move: abilities and object ownership -----------------------------
+    # Move makes several EVM bug classes unrepresentable and introduces its
+    # own, which live in the type system rather than in control flow.
+
+    #: A struct lost an ability (`store`, `copy`, `drop`, `key`). Granting
+    #: `store` is how a resource becomes freely transferable by anyone holding
+    #: it, so removing one is a containment fix, not a refactor.
+    ABILITY_RESTRICTED = "ability_restricted"
+    #: A capability or one-time-witness requirement appeared.
+    CAPABILITY_CHECK_ADDED = "capability_check_added"
+    #: An object stopped being freely transferable or shared —
+    #: `public_transfer` to `transfer`, or a `share_object` withdrawn.
+    OBJECT_OWNERSHIP_TIGHTENED = "object_ownership_tightened"
+    #: A shared object gained a version guard, so a stale reference can no
+    #: longer be used against the current state.
+    SHARED_OBJECT_VERSIONED = "shared_object_versioned"
+
+    # ---- MEV: value extractable by whoever orders the transaction ---------
+    # Not a memory-safety class and not an access-control class. The code is
+    # correct for a single caller and wrong once someone else chooses when it
+    # runs, which is why none of the above detects it.
+
+    #: A minimum-output or slippage bound appeared. Without one a swap can be
+    #: sandwiched for the whole of its price impact.
+    SLIPPAGE_BOUND_ADDED = "slippage_bound_added"
+    #: A deadline or expiry appeared. Without one a signed order can be held
+    #: and replayed at the moment it is most profitable to the holder.
+    DEADLINE_ADDED = "deadline_added"
+    #: An oracle reading started being checked for staleness or confidence.
+    ORACLE_STALENESS_CHECKED = "oracle_staleness_checked"
+    #: A price source moved off the spot reading — TWAP, observation window,
+    #: cumulative price — or gained a deviation bound.
+    PRICE_MANIPULATION_GUARDED = "price_manipulation_guarded"
+    #: Ordering dependence was removed or bounded: a commit-reveal, a nonce, a
+    #: sequence number, a per-slot guard.
+    ORDERING_DEPENDENCE_FIXED = "ordering_dependence_fixed"
+
     @property
     def bug_evidence(self) -> bool:
         """Does this shape assert that the previous behaviour was wrong?
@@ -60,12 +128,18 @@ class Signature(enum.Enum):
         changes the contract's surface. Neither says the old behaviour was a
         defect, so neither is bug evidence on its own.
         """
-        return self.value not in ("visibility_tightened", "access_control_added")
+        return self.value not in (
+            "visibility_tightened", "access_control_added",
+            # An ability or ownership restriction tightens what the type system
+            # permits. That is a real change to the contract's surface; it does
+            # not by itself say the old behaviour was a defect.
+            "ability_restricted", "object_ownership_tightened")
 
     @property
     def security_relevant(self) -> bool:
         """And that being wrong had a security consequence?"""
-        return self.value not in ("comparison_tightened", "visibility_tightened")
+        return self.value not in (
+            "comparison_tightened", "visibility_tightened")
 
 # --- vocabularies ----------------------------------------------------------
 # Identifier names, not natural language. `require` is a Solidity builtin, not
@@ -93,6 +167,62 @@ REENTRANCY_WORDS: Final[frozenset[str]] = frozenset({
 EXTERNAL_CALL_WORDS: Final[frozenset[str]] = frozenset({
     "call", "transfer", "transferFrom", "send", "delegatecall",
     "safeTransfer", "safeTransferFrom"})
+
+# ---- Solana: proving an account is what the caller says it is -------------
+SIGNER_WORDS: Final[frozenset[str]] = frozenset({
+    "is_signer", "Signer", "signer", "require_signer", "assert_signer",
+    "SignerAccount"})
+OWNER_CHECK_WORDS: Final[frozenset[str]] = frozenset({
+    "assert_owner", "check_owner", "owner", "program_id", "assert_owned_by",
+    "owned_by", "AccountOwner"})
+ANCHOR_CONSTRAINT_WORDS: Final[frozenset[str]] = frozenset({
+    "has_one", "constraint", "seeds", "address", "token", "mint", "authority",
+    "realloc", "init_if_needed"})
+PDA_WORDS: Final[frozenset[str]] = frozenset({
+    "find_program_address", "create_program_address", "bump", "canonical_bump",
+    "try_find_program_address", "get_bump"})
+CPI_WORDS: Final[frozenset[str]] = frozenset({
+    "invoke", "invoke_signed", "CpiContext", "cpi", "program_id",
+    "check_program_account", "assert_program"})
+CLOSE_WORDS: Final[frozenset[str]] = frozenset({
+    "close", "close_account", "lamports", "zeroed", "CLOSED_ACCOUNT_DISCRIMINATOR",
+    "realloc", "assign"})
+DISCRIMINATOR_WORDS: Final[frozenset[str]] = frozenset({
+    "discriminator", "DISCRIMINATOR", "account_type", "AccountType", "try_deserialize",
+    "anchor_lang"})
+
+# ---- Move: abilities and object ownership ---------------------------------
+ABILITY_WORDS: Final[frozenset[str]] = frozenset({"store", "copy", "drop", "key"})
+CAPABILITY_WORDS: Final[frozenset[str]] = frozenset({
+    "Cap", "AdminCap", "TreasuryCap", "OwnerCap", "UpgradeCap", "witness",
+    "Witness", "one_time_witness", "assert_admin", "MintCap", "BurnCap",
+    "SignerCapability", "signer_capability"})
+OWNERSHIP_WORDS: Final[frozenset[str]] = frozenset({
+    "public_transfer", "transfer", "share_object", "public_share_object",
+    "freeze_object", "public_freeze_object"})
+VERSION_WORDS: Final[frozenset[str]] = frozenset({
+    "version", "VERSION", "assert_version", "migrate", "upgrade_cap"})
+
+# ---- MEV: value extractable by whoever chooses when this runs -------------
+SLIPPAGE_WORDS: Final[frozenset[str]] = frozenset({
+    "min_amount_out", "minimum_amount_out", "amountOutMin", "amountOutMinimum",
+    "min_out", "minOut", "slippage", "min_received", "sqrt_price_limit",
+    "sqrtPriceLimitX96", "price_limit", "minAmountOut", "max_amount_in",
+    "amountInMaximum", "min_lp_amount", "threshold_amount"})
+DEADLINE_WORDS: Final[frozenset[str]] = frozenset({
+    "deadline", "expiry", "expires_at", "valid_until", "validUntil",
+    "expiration", "expiry_timestamp", "not_after", "timeout"})
+STALENESS_WORDS: Final[frozenset[str]] = frozenset({
+    "publish_time", "staleness", "stale", "last_updated", "updated_at",
+    "max_age", "maxAge", "age", "confidence", "conf", "heartbeat",
+    "updatedAt", "roundId", "answeredInRound", "max_staleness"})
+TWAP_WORDS: Final[frozenset[str]] = frozenset({
+    "twap", "TWAP", "observation", "observe", "cumulative", "time_weighted",
+    "ema", "EMA", "moving_average", "deviation", "max_deviation",
+    "price_impact", "oracle_price"})
+ORDERING_WORDS: Final[frozenset[str]] = frozenset({
+    "commit", "reveal", "nonce", "sequence", "seq", "last_slot", "slot",
+    "same_block", "block_number", "commitment", "salt"})
 
 _STRICT_OPS: Final[frozenset[str]] = frozenset({"<", ">"})
 _LOOSE_OPS: Final[frozenset[str]] = frozenset({"<=", ">=", "==", "!="})
@@ -142,6 +272,22 @@ def _non_behavioural(ts: Sequence[Tok]) -> bool:
 
 def _is_numeric(t: Tok) -> bool:
     return bool(t) and t[0].isdigit()
+
+
+#: Which failure surface a file belongs to. Taken from the extension rather
+#: than from the registry, because one commit can span ecosystems — Wormhole's
+#: history touches Solidity, Rust and Move in the same repository.
+def ecosystem_of(path: str) -> str:
+    low = path.lower()
+    if low.endswith((".sol", ".vy")):
+        return "evm"
+    if low.endswith(".rs"):
+        return "solana"
+    if low.endswith(".move"):
+        return "move"
+    if low.endswith(".cairo"):
+        return "cairo"
+    return ""
 
 
 def _one_point(before: Sequence[Tok], after: Sequence[Tok]
@@ -228,11 +374,118 @@ def detect(h: Hunk) -> list[Signature]:
     fire(edits and surgical and mentions_any(new_t, REENTRANCY_WORDS),
          Signature.REENTRANCY_GUARD_ADDED)
 
+    eco = ecosystem_of(h.file)
+    if eco == "solana":
+        _detect_solana(fire, h, before, after, new_t, gone_t, edits, surgical)
+    elif eco == "move":
+        _detect_move(fire, h, before, after, new_t, gone_t, edits, surgical)
+    # MEV is not an ecosystem. The same mistake — leaving the caller's price or
+    # timing unbounded — is made in Solidity, in Rust and in Move, and none of
+    # the shapes above notices it, because the code is correct for one caller
+    # and wrong once somebody else chooses when it runs.
+    _detect_mev(fire, h, before, after, new_t, gone_t, edits, surgical)
+
     if prod:
         return fired
     # A change confined to tests did not alter what ships. The shapes are still
     # reported; they just stop counting as security evidence.
     return [s for s in fired if not s.security_relevant]
+
+
+FireFn = Callable[[bool, Signature], None]
+
+
+def _detect_solana(fire: FireFn, h: Hunk, before: Sequence[Tok],
+                   after: Sequence[Tok], new_t: Sequence[Tok],
+                   gone_t: Sequence[Tok], edits: bool, surgical: bool) -> None:
+    """A Solana program is handed accounts by its caller and must prove each
+    one is what it claims to be. Nothing in the language does that for it, so
+    the entire class of "forgot to check" has no EVM analogue and none of the
+    EVM shapes sees it."""
+    fire(edits and mentions_any(new_t, SIGNER_WORDS)
+         and not mentions_any(before, SIGNER_WORDS), Signature.SIGNER_CHECK_ADDED)
+    fire(edits and mentions_any(new_t, OWNER_CHECK_WORDS)
+         and (mentions_any(after, GUARD_WORDS) or mentions_any(after, _COMPARISONS)),
+         Signature.OWNER_CHECK_ADDED)
+    # An Anchor constraint is an attribute, so it arrives with its own syntax
+    # rather than as a statement; requiring `account` keeps ordinary uses of
+    # the word `mint` or `authority` from firing.
+    fire(edits and mentions(after, "account")
+         and mentions_any(new_t, ANCHOR_CONSTRAINT_WORDS),
+         Signature.ACCOUNT_CONSTRAINT_ADDED)
+    fire(edits and (mentions_any(new_t, PDA_WORDS)
+                    or (mentions(gone_t, "create_program_address")
+                        and mentions(new_t, "find_program_address"))),
+         Signature.PDA_BUMP_CANONICALISED)
+    fire(edits and mentions_any(after, CPI_WORDS)
+         and mentions(new_t, "program_id")
+         and (mentions_any(after, GUARD_WORDS) or mentions_any(after, _COMPARISONS)),
+         Signature.CPI_TARGET_CHECKED)
+    # Draining lamports without clearing the data leaves an account that can be
+    # topped back up inside the same transaction and reused. The close itself
+    # is usually already there — what arrives is the zeroing — so the close has
+    # to be looked for in the CONTEXT as well as in what was added.
+    around = list(after) + tokens_of(h.context)
+    fire(edits and mentions_any(around, CLOSE_WORDS)
+         and mentions_any(new_t, ("zeroed", "CLOSED_ACCOUNT_DISCRIMINATOR",
+                                  "realloc", "assign", "fill")),
+         Signature.ACCOUNT_CLOSE_HARDENED)
+    fire(edits and mentions_any(new_t, DISCRIMINATOR_WORDS),
+         Signature.DISCRIMINATOR_CHECKED)
+    # `a.key() != b.key()` between two account parameters: the aliasing bug
+    # where one account is passed twice and written through both handles.
+    fire(edits and mentions(after, "key")
+         and (mentions(new_t, "!=") or mentions(new_t, "ne"))
+         and mentions_any(after, GUARD_WORDS),
+         Signature.DUPLICATE_ACCOUNT_CHECKED)
+
+
+def _detect_move(fire: FireFn, h: Hunk, before: Sequence[Tok],
+                 after: Sequence[Tok], new_t: Sequence[Tok],
+                 gone_t: Sequence[Tok], edits: bool, surgical: bool) -> None:
+    """Move puts several of its failure modes in the TYPE system rather than in
+    control flow, so a shape that looks for a check will never see them. The
+    sharpest is an ability: granting `store` is how a resource becomes freely
+    transferable by anyone who holds it."""
+    fire(edits and mentions_any(gone_t, ABILITY_WORDS)
+         and mentions(before, "has") and not mentions_any(new_t, ABILITY_WORDS),
+         Signature.ABILITY_RESTRICTED)
+    fire(edits and surgical and mentions_any(new_t, CAPABILITY_WORDS),
+         Signature.CAPABILITY_CHECK_ADDED)
+    fire(edits and ((mentions(gone_t, "public_transfer") and mentions(new_t, "transfer"))
+                    or (mentions(gone_t, "public_share_object")
+                        and not mentions(new_t, "public_share_object"))
+                    or (mentions(gone_t, "share_object")
+                        and mentions_any(new_t, ("transfer", "freeze_object")))),
+         Signature.OBJECT_OWNERSHIP_TIGHTENED)
+    fire(edits and mentions_any(new_t, VERSION_WORDS)
+         and mentions_any(after, GUARD_WORDS), Signature.SHARED_OBJECT_VERSIONED)
+
+
+def _detect_mev(fire: FireFn, h: Hunk, before: Sequence[Tok],
+                after: Sequence[Tok], new_t: Sequence[Tok],
+                gone_t: Sequence[Tok], edits: bool, surgical: bool) -> None:
+    """Value extractable by whoever decides when the transaction runs.
+
+    Not memory safety and not access control: the code is correct for a single
+    caller and wrong the moment someone else chooses the ordering. A swap with
+    no minimum output is sandwichable for the whole of its price impact; a
+    signed order with no deadline can be held until it pays; a spot price read
+    inside the same transaction that moves it is not a price at all.
+    """
+    fire(edits and mentions_any(new_t, SLIPPAGE_WORDS),
+         Signature.SLIPPAGE_BOUND_ADDED)
+    fire(edits and mentions_any(new_t, DEADLINE_WORDS)
+         and (mentions_any(after, GUARD_WORDS) or mentions_any(after, _COMPARISONS)),
+         Signature.DEADLINE_ADDED)
+    fire(edits and mentions_any(new_t, STALENESS_WORDS)
+         and (mentions_any(after, GUARD_WORDS) or mentions_any(after, _COMPARISONS)),
+         Signature.ORACLE_STALENESS_CHECKED)
+    fire(edits and (mentions_any(new_t, TWAP_WORDS)
+                    or (mentions(gone_t, "slot0") and mentions_any(new_t, TWAP_WORDS))),
+         Signature.PRICE_MANIPULATION_GUARDED)
+    fire(edits and surgical and mentions_any(new_t, ORDERING_WORDS)
+         and mentions_any(after, GUARD_WORDS), Signature.ORDERING_DEPENDENCE_FIXED)
 
 
 def signatures(d: Diff) -> list[Signature]:

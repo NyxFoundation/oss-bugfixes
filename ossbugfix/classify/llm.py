@@ -167,10 +167,36 @@ Decide:
    induced or exploited by an attacker, or cost a user funds, keys, availability
    or confidentiality? Most bug fixes are not security fixes. Say false unless
    the diff shows it.
+
+   Count ORDERING as an attacker capability, not just input. Code can be
+   correct for one caller and exploitable once somebody else chooses when it
+   runs. These are security fixes:
+     - a minimum-output or slippage bound added to a swap or a liquidation
+       (without one the trade is sandwichable for its whole price impact)
+     - a deadline or expiry added to a signed order or a quote (without one it
+       is held until the moment it pays the holder)
+     - an oracle reading gaining a staleness, confidence or deviation check
+     - a price source moving off the spot reading to a TWAP or an observation
+       window, where the spot could be moved inside the same transaction
+     - a commit-reveal, nonce or per-slot guard closing ordering dependence
+
+   Judge the ecosystem's own failure modes, not Solidity's:
+     Solana (.rs)  — an account is whatever the caller passed. Missing
+       `is_signer`, a missing owner/program-id check, a non-canonical PDA bump,
+       an unchecked CPI target, a close that drains lamports without zeroing
+       the data (revival), a missing discriminator check (type cosplay), two
+       account parameters that may alias. These have no EVM analogue.
+     Move (.move)  — the failures are in the TYPE system. Granting a struct the
+       `store` ability makes it freely transferable by anyone holding it;
+       removing one is a containment fix. Also: a missing capability or
+       one-time-witness, an object shared when it should be owned, a shared
+       object used without a version guard.
+     Cairo (.cairo) — felt arithmetic and the proving model.
 3. severity — Critical / High / Medium / Low / Info, or "" if not a security fix.
 4. cwe — the single best CWE identifier (e.g. CWE-125), or "".
 5. stride — Spoofing / Tampering / Repudiation / InformationDisclosure /
-   DenialOfService / ElevationOfPrivilege, or "".
+   DenialOfService / ElevationOfPrivilege, or "". MEV-shaped findings are
+   usually Tampering (the attacker alters the outcome by choosing ordering).
 6. confidence — 0.0-1.0, your own calibration.
 7. rationale — one or two sentences, citing what in the diff decided it.
 
@@ -180,7 +206,13 @@ If the diff is truncated or absent, lower your confidence rather than guessing.
 
 Reply with ONLY this JSON object:
 {{"is_bugfix": true|false, "is_security_fix": true|false, "severity": "...",
- "cwe": "...", "stride": "...", "confidence": 0.0, "rationale": "..."}}
+ "cwe": "...", "stride": "...", "mev": true|false, "confidence": 0.0,
+ "rationale": "..."}}
+
+`mev` is true when the defect is only exploitable by somebody who controls
+ordering — sandwiching, back-running, a held order, a manipulated spot price.
+It is a property of the finding, not a severity, so a `mev` finding can be any
+severity and a Critical finding need not be MEV.
 """
 
 
@@ -390,6 +422,13 @@ class LLMClassifier(Classifier):
     # --- shaping -----------------------------------------------------------
 
     def _verdict_from(self, obj: dict, *, cached: bool = False) -> Verdict:
+        rationale = str(obj.get("rationale") or "")[:1000]
+        # `mev` is reported by the model but is not a schema column. Prefixing
+        # it keeps it searchable without inventing a column the deterministic
+        # engines cannot fill — a column only one engine ever writes reads as
+        # "every other engine said no".
+        if _as_bool(obj.get("mev")) is True:
+            rationale = f"[MEV] {rationale}"[:1000]
         return Verdict(
             is_bugfix=_as_bool(obj.get("is_bugfix")),
             is_security_fix=_as_bool(obj.get("is_security_fix")),
@@ -397,7 +436,7 @@ class LLMClassifier(Classifier):
             cwe=_clean_cwe(obj.get("cwe")),
             stride=_clean(obj.get("stride"), _STRIDE),
             confidence=_as_float(obj.get("confidence")),
-            rationale=str(obj.get("rationale") or "")[:1000],
+            rationale=rationale,
             classifier=self.engine_label,
             model=self.model,
         )

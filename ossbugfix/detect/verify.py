@@ -1,14 +1,31 @@
 """verify.py — the honesty rules, discharged over the whole input space.
 
-The classifier's decision has a FINITE domain: three booleans read off the
-diff, plus a subset of ten signatures. That is 8 x 2^10 = 8,192 distinct
-inputs. Finite means the rules can be *proved*, not sampled — and it means two
-independent methods can both be complete:
+The classifier's decision has a finite domain, but no longer a small one:
+three booleans read off the diff, plus a subset of 27 signatures — 8 x 2^27,
+which is 1.07 billion and not enumerable. Enumeration is not needed, because
+the decision reads the signature set through exactly two predicates:
 
-  Z3    the rules are encoded as SMT constraints and their negations checked
-        for satisfiability. `unsat` is a proof over the modelled decision.
-  exec  the real `decide()` is run over all 8,192 inputs and compared against
-        the model, point by point.
+    any(s.bug_evidence for s in found)        decides is_bugfix
+    any(s.security_relevant for s in found)   decides is_security_fix
+
+so every subset with the same answers to those two is the same input as far
+as `decide` is concerned. That collapses 2^27 subsets into 4 equivalence
+classes, and 8 x 4 = 32 inputs IS enumerable — completely, not as a sample.
+
+The reduction is not assumed. `class_constancy()` checks it: within each
+class, hundreds of randomly drawn subsets must all produce the same verdict
+booleans. If a detector were ever wired into the decision some other way,
+that check fails before the enumeration claims anything.
+
+Two independent methods, both complete:
+
+  Z3    the rules are encoded as SMT constraints over 27 symbolic booleans and
+        their negations checked for satisfiability. `unsat` is a proof over
+        every subset at once — a solver does not enumerate, which is exactly
+        why it keeps working as the taxonomy grows.
+  exec  the real `decide()` is run over every equivalence class, cross-checked
+        against the model, and the classes themselves are validated by
+        sampling.
 
 The second is what makes the first worth anything. A solver proves properties
 of the model you gave it; the gap between that model and the code that ships
@@ -29,6 +46,7 @@ about which guarantee each rule has.
 from __future__ import annotations
 
 import itertools
+import random
 import sys
 from dataclasses import dataclass
 from types import ModuleType
@@ -37,7 +55,8 @@ from typing import Any, Callable, Sequence
 from .signature import Signature
 from .verdict import Ground, Verdict, decide
 
-__all__ = ["Property", "PROPERTIES", "prove_all", "cross_check", "main"]
+__all__ = ["Property", "PROPERTIES", "prove_all", "cross_check",
+           "class_constancy", "main"]
 
 SIGNATURES: tuple[Signature, ...] = tuple(Signature)
 #: touched / trivial / docs_only
@@ -111,14 +130,64 @@ PROPERTIES: tuple[Property, ...] = (
 )
 
 
-def _all_inputs() -> list[tuple[bool, bool, bool, tuple[Signature, ...]]]:
-    """Every decision input. 8 flag combinations x 2^10 signature subsets."""
-    out = []
-    for r in range(len(SIGNATURES) + 1):
+def _representatives() -> list[tuple[Signature, ...]]:
+    """One signature subset per equivalence class, plus the degenerate ones.
+
+    The four classes are (any_bug_evidence, any_security_relevant). Not every
+    combination is inhabited — a signature that is bug evidence but not
+    security relevant exists, and so does the reverse — so the classes are
+    discovered from the taxonomy rather than assumed.
+    """
+    seen: dict[tuple[bool, bool], tuple[Signature, ...]] = {}
+    # Singletons first, so each representative is as small as possible and a
+    # failure report names one signature rather than a set.
+    for r in (1, 2):
         for subset in itertools.combinations(SIGNATURES, r):
-            for touched, trivial, docs in FLAGS:
-                out.append((touched, trivial, docs, subset))
+            key = (any(s.bug_evidence for s in subset),
+                   any(s.security_relevant for s in subset))
+            seen.setdefault(key, subset)
+    out: list[tuple[Signature, ...]] = [()]
+    out.extend(seen.values())
     return out
+
+
+def _all_inputs() -> list[tuple[bool, bool, bool, tuple[Signature, ...]]]:
+    """Every decision input, up to equivalence: 8 flag combinations times one
+    representative of each inhabited signature class."""
+    return [(t, tr, d, subset)
+            for subset in _representatives()
+            for t, tr, d in FLAGS]
+
+
+def class_constancy(trials: int = 400, seed: int = 0) -> list[str]:
+    """Does the verdict really depend on the signature set only through those
+    two predicates?
+
+    Everything above rests on this. Draw random subsets, bucket them by the
+    two predicates, and insist every member of a bucket produces the same
+    verdict booleans. A detector wired into the decision some other way breaks
+    this before the enumeration can claim completeness it does not have.
+    """
+    rng = random.Random(seed)
+    buckets: dict[tuple[bool, bool, bool, bool, bool],
+                  tuple[bool | None, bool | None, Ground]] = {}
+    failures: list[str] = []
+    for _ in range(trials):
+        k = rng.randrange(0, len(SIGNATURES) + 1)
+        subset = tuple(rng.sample(SIGNATURES, k))
+        for touched, trivial, docs in FLAGS:
+            key = (touched, trivial, docs,
+                   any(s.bug_evidence for s in subset),
+                   any(s.security_relevant for s in subset))
+            v = decide(touched=touched, trivial=trivial, docs_only=docs,
+                       found=list(subset))
+            got = (v.is_bugfix, v.is_security_fix, v.ground)
+            if key in buckets and buckets[key] != got:
+                failures.append(
+                    f"class {key} is not constant: {buckets[key]} vs {got} "
+                    f"at sigs={[s.value for s in subset]}")
+            buckets.setdefault(key, got)
+    return failures
 
 
 def exhaustive_check() -> list[str]:
@@ -276,12 +345,23 @@ def cross_check() -> list[str]:
 def prove_all(verbose: bool = True) -> int:
     inputs = _all_inputs()
     if verbose:
-        print(f"decision domain: {len(inputs):,} inputs "
-              f"({len(FLAGS)} flag combinations x 2^{len(SIGNATURES)} signature subsets)")
+        total = len(FLAGS) * 2 ** len(SIGNATURES)
+        print(f"decision domain: {len(FLAGS)} flag combinations x 2^{len(SIGNATURES)} "
+              f"signature subsets = {total:,} inputs,")
+        print(f"                 collapsing to {len(inputs)} by equivalence "
+              f"(the decision reads the set through two predicates)")
+
+    constancy = class_constancy()
+    if verbose:
+        print(f"\n[class] the equivalence itself, over 400 random subsets x "
+              f"{len(FLAGS)} flag combinations: "
+              + ("holds" if not constancy else f"{len(constancy)} FAILURES"))
+    for f in constancy[:5]:
+        print("  -", f, file=sys.stderr)
 
     failures = exhaustive_check()
     if verbose:
-        print(f"\n[exec] ran the real decide() over all {len(inputs):,} inputs: "
+        print(f"[exec] ran the real decide() over all {len(inputs)} classes: "
               + ("ok" if not failures else f"{len(failures)} FAILURES"))
     for f in failures[:5]:
         print("  -", f, file=sys.stderr)
@@ -296,12 +376,12 @@ def prove_all(verbose: bool = True) -> int:
 
     mismatches = cross_check()
     if verbose:
-        print(f"[link] SMT model vs real decide(), all {len(inputs):,} points: "
+        print(f"[link] SMT model vs real decide(), all {len(inputs)} classes: "
               + ("agree" if not mismatches else f"{len(mismatches)} MISMATCHES"))
     for m in mismatches[:5]:
         print("  -", m, file=sys.stderr)
 
-    bad = len(failures) + len(z3_failures) + len(mismatches)
+    bad = len(failures) + len(z3_failures) + len(mismatches) + len(constancy)
     if verbose:
         print("\nVERIFIED" if not bad else f"\nFAILED ({bad} problems)")
     return 1 if bad else 0
