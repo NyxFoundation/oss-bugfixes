@@ -11,3 +11,7 @@ __pycache__/
 
 # Lean build artifacts
 lean/.lake/
+
+# The working CSV. What git carries is the parquet beside it — same table,
+# one fifth the size, and it would otherwise reach 240 MB at full coverage.
+domains/*/data/bugfixes.csv

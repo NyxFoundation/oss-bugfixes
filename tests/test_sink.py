@@ -105,3 +105,48 @@ def test_concurrent_merges_do_not_lose_rows(tmp_path):
     assert len(df) == 25, f"rows were lost to a concurrent write: {len(df)}"
     assert (df["classifier"] == "a").sum() == 12
     assert (df["classifier"] == "b").sum() == 12
+
+
+def test_the_published_parquet_holds_the_same_table(tmp_path):
+    """git carries the parquet, not the CSV — 13.2 MB against 65.6 at 60k rows,
+    and the full corpus is four times that. The saving must be encoding, never
+    a dropped column."""
+    sink = Sink("d", tmp_path / "bugfixes.csv")
+    sink.merge(pd.concat([row(sha=f"{i:040x}") for i in range(5)], ignore_index=True))
+
+    assert sink.parquet_path.exists()
+    # `dtype=str`, as Sink.read does. Without it an all-digit sha comes back
+    # as the integer 0 — a CSV hazard the parquet simply does not have, and
+    # one more reason the published artifact is the parquet.
+    csv = pd.read_csv(sink.path, dtype=str, keep_default_na=False, na_values=[""])
+    parq = pd.read_parquet(sink.parquet_path)
+    assert len(csv) == len(parq) == 5
+    assert list(csv.columns) == list(parq.columns)
+    # Not a size assertion: at five rows parquet's footer (20 KB) dwarfs the
+    # data and the CSV wins. The saving is a property of scale — 13.2 MB
+    # against 65.6 at 60,055 rows — and the invariant worth testing here is
+    # that the two hold the same table.
+    for col in ("sha", "rationale", "classifier"):
+        assert list(csv[col].fillna("")) == list(parq[col].fillna(""))
+
+
+def test_a_fresh_clone_reads_through_the_parquet(tmp_path):
+    """A clone has the parquet and no CSV. Reading must still work, or the
+    published artifact needs a rebuild before anyone can look at it."""
+    sink = Sink("d", tmp_path / "bugfixes.csv")
+    sink.merge(row(rationale="kept"))
+    sink.path.unlink()
+
+    fresh = Sink("d", tmp_path / "bugfixes.csv")
+    df = fresh.read()
+    assert len(df) == 1 and df.iloc[0]["rationale"] == "kept"
+
+
+def test_merging_into_a_parquet_only_clone_keeps_both(tmp_path):
+    sink = Sink("d", tmp_path / "bugfixes.csv")
+    sink.merge(row(sha="a" * 40))
+    sink.path.unlink()
+
+    Sink("d", tmp_path / "bugfixes.csv").merge(row(sha="b" * 40))
+    out = Sink("d", tmp_path / "bugfixes.csv").read()
+    assert len(out) == 2

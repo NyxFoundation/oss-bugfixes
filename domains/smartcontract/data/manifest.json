@@ -2,16 +2,16 @@
  "domain": "smartcontract",
  "schema_version": "2",
  "tool_version": "0.1.0",
- "updated_at": "2026-11-03T10:50:39+0900",
- "rows": 5607,
- "classified": 5607,
- "bugfixes": 1182,
- "security_fixes": 672,
+ "updated_at": "2026-11-04T03:10:26+0900",
+ "rows": 60055,
+ "classified": 60055,
+ "bugfixes": 19828,
+ "security_fixes": 10969,
  "by_classifier": {
-  "llm:openai": 5074,
-  "structural": 533
+  "llm:openai": 54927,
+  "structural": 5128
  },
- "repos": 5,
+ "repos": 42,
  "columns": [
   "id",
   "url",
