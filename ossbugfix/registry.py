@@ -22,10 +22,18 @@ Registry shape (YAML or JSON, same keys)::
       ...
 
 Required per entry: `repo`. Everything else is optional and free-form, except
-`tier` (1 = mass-market, 2 = significant, 3 = niche) and `archived`, which the
-CLI knows how to filter on. Unknown keys are preserved, not rejected — a domain
-is allowed to carry its own metadata (a wallet's custody model, a client's
-consensus layer) without the framework learning about it.
+`tier` (1 = mass-market, 2 = significant, 3 = niche), `archived`, and `paths`,
+which the framework acts on. Unknown keys are preserved, not rejected — a
+domain is allowed to carry its own metadata (a wallet's custody model, a
+client's consensus layer) without the framework learning about it.
+
+`paths` narrows a repository to the part of it that is in scope. Several of
+the most important projects live in monorepos whose history is mostly
+something else: of `smartcontractkit/chainlink`'s 45,093 commits only 3,454
+touch `contracts/`, and the other 41,639 are a Go node that belongs in
+domains/blockchain by this domain's own scope rule. Without `paths` the choice
+is to mis-file the repository or to classify forty thousand commits that
+cannot contain the defect being looked for.
 """
 from __future__ import annotations
 
@@ -59,6 +67,9 @@ class Repo:
     category: str = ""
     language: str = ""
     tags: tuple[str, ...] = ()
+    #: Subtrees that are in scope. Empty = the whole repository. Matched by
+    #: git's own pathspec, so a trailing slash means "this directory".
+    paths: tuple[str, ...] = ()
     extra: dict[str, Any] = field(default_factory=dict, compare=False)
 
     @property
@@ -166,7 +177,8 @@ def _read(p: Path) -> Any:
     return yaml.safe_load(text)
 
 
-_KNOWN = {"repo", "forge", "branch", "tier", "archived", "category", "language", "tags"}
+_KNOWN = {"repo", "forge", "branch", "tier", "archived", "category", "language",
+          "tags", "paths"}
 
 
 def _parse_entry(p: Path, domain: str, slug: str, entry: Any,
@@ -202,6 +214,16 @@ def _parse_entry(p: Path, domain: str, slug: str, entry: Any,
     if not all(isinstance(t, str) for t in tags):
         raise RegistryError(f"{where}: `tags` must be a list of strings")
 
+    scope = merged.get("paths") or []
+    if isinstance(scope, str):
+        scope = [scope]
+    if not all(isinstance(t, str) and t.strip() for t in scope):
+        raise RegistryError(f"{where}: `paths` must be a list of non-empty strings")
+    for t in scope:
+        if t.startswith("/") or ".." in t:
+            raise RegistryError(
+                f"{where}: `paths` entries are repo-relative, got {t!r}")
+
     branch = merged.get("branch")
     return Repo(
         slug=slug,
@@ -214,6 +236,7 @@ def _parse_entry(p: Path, domain: str, slug: str, entry: Any,
         category=str(merged.get("category") or ""),
         language=str(merged.get("language") or ""),
         tags=tuple(tags),
+        paths=tuple(scope),
         extra={k: v for k, v in merged.items() if k not in _KNOWN},
     )
 

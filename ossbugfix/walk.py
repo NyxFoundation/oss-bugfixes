@@ -139,6 +139,11 @@ class WalkConfig:
     #: emitted again, which turns a re-walk into "what landed since last time".
     #: Empty = walk the whole history.
     since_tips: tuple[str, ...] = ()
+    #: Subtrees in scope, from the registry. Empty = the whole repository.
+    #: Passed to git as a pathspec, so git does the filtering and never emits
+    #: the commits at all — which is the point: the alternative is reading
+    #: forty thousand commits in order to discard them.
+    paths: tuple[str, ...] = ()
 
     def fingerprint(self) -> str:
         """Identity of the SHAPE of the output, so an incremental walk can
@@ -148,7 +153,7 @@ class WalkConfig:
         not what a kept row looks like.
         """
         parts = (self.max_files, self.require_source, self.all_refs,
-                 self.line_counts)
+                 self.line_counts, ",".join(sorted(self.paths)))
         return "|".join(str(x) for x in parts)
 
 
@@ -178,6 +183,8 @@ class WalkResult:
 def walk(repo: Repo, cfg: WalkConfig | None = None) -> WalkResult:
     """Walk one repository's history into a commit frame."""
     cfg = cfg or WalkConfig()
+    if repo.paths and not cfg.paths:
+        cfg = replace(cfg, paths=repo.paths)
     if not mirror.exists(repo):
         return WalkResult(repo, schema.empty(schema.COMMIT_COLUMNS),
                           error="no mirror — run `oss-bugfixes mirror` first")
@@ -278,6 +285,8 @@ def iter_commits(path: Path, cfg: WalkConfig) -> Iterator[_Record]:
         # collected. This is the whole of "incremental": git does the set
         # difference, so nothing is re-read and nothing is re-parsed.
         args += ["--not", *cfg.since_tips]
+    if cfg.paths:
+        args += ["--", *cfg.paths]
     proc = subprocess.Popen(
         args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         text=True, encoding="utf-8", errors="replace", bufsize=1 << 20,

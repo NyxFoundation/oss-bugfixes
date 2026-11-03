@@ -222,6 +222,7 @@ repos:
     tier: 3
     language: solidity
     ecosystem: evm
+    paths: [contracts/]
   maverick-v2:
     repo: maverickprotocol/v2-common
     category: dex
@@ -425,12 +426,14 @@ repos:
     language: solidity
     ecosystem: evm
     archived: true
+    paths: [contracts/]
   wormhole:
     repo: wormhole-foundation/wormhole
     category: bridge
     tier: 1
     language: solidity
     ecosystem: evm
+    paths: [ethereum/, solana/, sui/, aptos/]
   across:
     repo: across-protocol/contracts
     category: bridge
@@ -467,6 +470,7 @@ repos:
     tier: 3
     language: solidity
     ecosystem: evm
+    paths: [packages/deployments/contracts/]
   debridge:
     repo: debridge-finance/debridge-contracts-v1
     category: bridge
@@ -491,6 +495,7 @@ repos:
     tier: 3
     language: solidity
     ecosystem: evm
+    paths: [packages/contracts-core/contracts/]
 
   # ---- EVM — oracles -------------------------------------------------
   chainlink:
@@ -499,18 +504,21 @@ repos:
     tier: 1
     language: go
     ecosystem: evm
+    paths: [contracts/]
   api3-airnode:
     repo: api3dao/airnode
     category: oracle
     tier: 3
     language: typescript
     ecosystem: evm
+    paths: [packages/airnode-protocol/contracts/]
   redstone:
     repo: redstone-finance/redstone-oracles-monorepo
     category: oracle
     tier: 3
     language: typescript
     ecosystem: evm
+    paths: [packages/evm-connector/contracts/, packages/on-chain-relayer/contracts/]
   tellor:
     repo: tellor-io/tellorFlex
     category: oracle
@@ -537,6 +545,7 @@ repos:
     tier: 2
     language: go
     ecosystem: evm
+    paths: [protocol/x/]
   synthetix-v3:
     repo: Synthetixio/synthetix-v3
     category: perps
@@ -639,18 +648,21 @@ repos:
     tier: 3
     language: solidity
     ecosystem: evm
+    paths: [src/]
   superfluid:
     repo: superfluid-org/protocol-monorepo
     category: infra
     tier: 3
     language: solidity
     ecosystem: evm
+    paths: [packages/ethereum-contracts/contracts/]
   unlock:
     repo: unlock-protocol/unlock
     category: infra
     tier: 3
     language: solidity
     ecosystem: evm
+    paths: [smart-contracts/]
 
   # ---- Solana — the framework ----------------------------------------
   anchor:
@@ -881,6 +893,7 @@ repos:
     tier: 2
     language: rust
     ecosystem: solana
+    paths: [programs/]
   voter-stake-registry:
     repo: blockworks-foundation/voter-stake-registry
     category: infra
@@ -895,6 +908,7 @@ repos:
     tier: 1
     language: move
     ecosystem: aptos
+    paths: [aptos-move/framework/]
   aptos-framework:
     repo: aptos-labs/aptos-framework
     category: library
@@ -950,6 +964,7 @@ repos:
     tier: 1
     language: move
     ecosystem: sui
+    paths: [crates/sui-framework/]
   suitears:
     repo: interest-protocol/suitears
     category: library
@@ -1048,6 +1063,7 @@ repos:
     tier: 1
     language: rust
     ecosystem: multi
+    paths: [target_chains/]
   move-language:
     repo: move-language/move
     category: framework
@@ -1055,4 +1071,5 @@ repos:
     language: rust
     ecosystem: multi
     archived: true
+    paths: [language/move-stdlib/, language/move-core/]
 
