@@ -41,7 +41,7 @@ repos:
     layer: execution
     ecosystem: ethereum
   besu:
-    repo: hyperledger/besu
+    repo: besu-eth/besu
     category: client
     tier: 1
     language: java
@@ -85,14 +85,14 @@ repos:
     layer: consensus
     ecosystem: ethereum
   prysm:
-    repo: prysmaticlabs/prysm
+    repo: OffchainLabs/prysm
     category: client
     tier: 1
     language: go
     layer: consensus
     ecosystem: ethereum
   teku:
-    repo: Consensys/teku
+    repo: Consensys-Incorporated/teku
     category: client
     tier: 1
     language: java
@@ -124,7 +124,7 @@ repos:
     layer: execution
     ecosystem: ethereum
   evmone:
-    repo: ethereum/evmone
+    repo: ipsilon/evmone
     category: library
     tier: 2
     language: cpp
@@ -290,6 +290,7 @@ repos:
     language: cpp
     layer: full
     ecosystem: zcash
+    archived: true
   cardano-node:
     repo: IntersectMBO/cardano-node
     category: client
@@ -362,6 +363,7 @@ repos:
     language: go
     layer: execution
     ecosystem: polygon
+    archived: true
   starknet-sequencer:
     repo: starkware-libs/sequencer
     category: client

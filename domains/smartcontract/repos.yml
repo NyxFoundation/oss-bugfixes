@@ -4,240 +4,1055 @@
 # and a defect in it puts value held by that deployment at risk. Node software
 # belongs in domains/blockchain; key custody belongs in domains/wallet.
 #
-# Two kinds of entry, deliberately mixed:
-#   * the widely-forked LIBRARIES (OpenZeppelin, Solady, Solmate). A defect in
-#     one of these is a defect in every protocol that inherited it, which is
-#     what makes their fix history disproportionately valuable.
-#   * the large protocol DEPLOYMENTS. These carry the fixes that happened after
-#     an audit, which is exactly the population an audit tool should be scored
-#     against.
+# Four execution environments, because "smart contract" is not one language:
 #
-# This domain also holds the audit-findings corpus in data/, which is a
-# different kind of evidence: an expert's written judgement rather than a
-# commit. The two are kept side by side on purpose — a finding says what an
-# auditor caught, a commit says what shipped.
+#   evm       Solidity and Vyper. The largest body of deployed value and of
+#             published audit history.
+#   solana    Rust programs. A different failure surface entirely — account
+#             validation, PDA derivation, CPI reentrancy — which is why it is
+#             listed rather than assumed to behave like the EVM.
+#   aptos/sui Move. Resource semantics make whole EVM bug classes
+#             unrepresentable and introduce their own around capabilities and
+#             object ownership.
+#   starknet  Cairo. Small but the proving model makes its arithmetic bugs
+#             distinct.
+#
+# Two kinds of entry, mixed on purpose:
+#   * the widely-FORKED libraries (OpenZeppelin, Solady, SPL, Metaplex, the
+#     Sui and Aptos frameworks). A defect in one is a defect in every protocol
+#     that inherited it, which makes their fix history disproportionately
+#     valuable.
+#   * the large protocol DEPLOYMENTS. These carry the fixes that happened
+#     AFTER an audit, which is exactly the population an audit tool should be
+#     scored against.
+#
+# Archived repositories are kept. A history that will not grow is still
+# evidence, and several of these — Balancer v2, Compound v2, Drift v2 — hold
+# more deployed value than active successors.
+#
+# Every entry here was checked against the forge when it was added. Check them
+# again with `oss-bugfixes audit --domain smartcontract`: the first such audit
+# found one deleted repository and four that had moved organisation, out of
+# forty.
+#
+# Extra field carried for this domain:
+#   ecosystem  evm | solana | aptos | sui | starknet | multi
 
 domain: smartcontract
 description: >-
   Deployed on-chain application code and the contract libraries it inherits
-  from, where a defect puts value held by the deployment at risk.
+  from, across EVM, Solana, Move and Cairo, where a defect puts value held by
+  the deployment at risk.
 
 defaults:
   forge: github.com
 
 repos:
-  # ---- contract libraries (a defect here is inherited by thousands) -------
+
+  # ---- EVM — libraries everything inherits from ----------------------
+  forge-std:
+    repo: foundry-rs/forge-std
+    category: library
+    tier: 1
+    language: solidity
+    ecosystem: evm
   openzeppelin-contracts:
     repo: OpenZeppelin/openzeppelin-contracts
     category: library
     tier: 1
     language: solidity
+    ecosystem: evm
   openzeppelin-upgrades:
     repo: OpenZeppelin/openzeppelin-contracts-upgradeable
     category: library
     tier: 1
     language: solidity
-  solady:
-    repo: Vectorized/solady
-    category: library
-    tier: 1
-    language: solidity
-  solmate:
-    repo: transmissions11/solmate
-    category: library
-    tier: 2
-    language: solidity
-  prb-math:
-    repo: PaulRBerg/prb-math
-    category: library
-    tier: 2
-    language: solidity
+    ecosystem: evm
   permit2:
     repo: Uniswap/permit2
     category: library
     tier: 1
     language: solidity
+    ecosystem: evm
+  solady:
+    repo: Vectorized/solady
+    category: library
+    tier: 1
+    language: solidity
+    ecosystem: evm
+  abdk-libraries:
+    repo: abdk-consulting/abdk-libraries-solidity
+    category: library
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  erc721a:
+    repo: chiru-labs/ERC721A
+    category: library
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  openzeppelin-foundry-upgrades:
+    repo: OpenZeppelin/openzeppelin-foundry-upgrades
+    category: library
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  prb-math:
+    repo: PaulRBerg/prb-math
+    category: library
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  snekmate:
+    repo: pcaversaccio/snekmate
+    category: library
+    tier: 2
+    language: vyper
+    ecosystem: evm
+  solmate:
+    repo: transmissions11/solmate
+    category: library
+    tier: 2
+    language: solidity
+    ecosystem: evm
   create2-factory:
     repo: Arachnid/deterministic-deployment-proxy
     category: library
     tier: 3
     language: solidity
+    ecosystem: evm
+  solidity-bytes-utils:
+    repo: GNSPS/solidity-bytes-utils
+    category: library
+    tier: 3
+    language: solidity
+    ecosystem: evm
 
-  # ---- DEX / AMM ----------------------------------------------------------
-  uniswap-v4-core:
-    repo: Uniswap/v4-core
+  # ---- EVM — exchanges and AMMs --------------------------------------
+  uniswap-universal-router:
+    repo: Uniswap/universal-router
     category: dex
     tier: 1
     language: solidity
+    ecosystem: evm
   uniswap-v3-core:
     repo: Uniswap/v3-core
     category: dex
     tier: 1
     language: solidity
-  uniswap-v2-core:
-    repo: Uniswap/v2-core
+    ecosystem: evm
+  uniswap-v3-periphery:
+    repo: Uniswap/v3-periphery
+    category: dex
+    tier: 1
+    language: solidity
+    ecosystem: evm
+  uniswap-v4-core:
+    repo: Uniswap/v4-core
+    category: dex
+    tier: 1
+    language: solidity
+    ecosystem: evm
+  uniswap-v4-periphery:
+    repo: Uniswap/v4-periphery
+    category: dex
+    tier: 1
+    language: solidity
+    ecosystem: evm
+  aerodrome:
+    repo: aerodrome-finance/contracts
     category: dex
     tier: 2
     language: solidity
+    ecosystem: evm
+  balancer-v2:
+    repo: balancer/balancer-v2-monorepo
+    category: dex
+    tier: 2
+    language: solidity
+    ecosystem: evm
+    archived: true
   balancer-v3:
     repo: balancer/balancer-v3-monorepo
     category: dex
     tier: 2
     language: solidity
-  curve-contracts:
-    repo: curvefi/curve-contract
-    category: dex
-    tier: 2
-    language: vyper
-  pancakeswap:
-    repo: pancakeswap/pancake-smart-contracts
-    category: dex
-    tier: 3
-    language: solidity
+    ecosystem: evm
+    archived: true
   cowswap:
     repo: cowprotocol/contracts
     category: dex
     tier: 2
     language: solidity
+    ecosystem: evm
+  curve-contracts:
+    repo: curvefi/curve-contract
+    category: dex
+    tier: 2
+    language: vyper
+    ecosystem: evm
+  curve-stablecoin:
+    repo: curvefi/curve-stablecoin
+    category: dex
+    tier: 2
+    language: vyper
+    ecosystem: evm
+  uniswap-v2-core:
+    repo: Uniswap/v2-core
+    category: dex
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  uniswap-v2-periphery:
+    repo: Uniswap/v2-periphery
+    category: dex
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  velodrome:
+    repo: velodrome-finance/contracts
+    category: dex
+    tier: 2
+    language: solidity
+    ecosystem: evm
   0x-protocol:
     repo: 0xProject/protocol
     category: dex
     tier: 3
     language: solidity
+    ecosystem: evm
+  maverick-v2:
+    repo: maverickprotocol/v2-common
+    category: dex
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  pancakeswap-infinity-core:
+    repo: pancakeswap/infinity-core
+    category: dex
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  pancakeswap-infinity-periphery:
+    repo: pancakeswap/infinity-periphery
+    category: dex
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  sushiswap-v2:
+    repo: sushiswap/v2-core
+    category: dex
+    tier: 3
+    language: solidity
+    ecosystem: evm
 
-  # ---- lending / CDP ------------------------------------------------------
+  # ---- EVM — lending and CDPs ----------------------------------------
   aave-v3:
     repo: aave-dao/aave-v3-origin
     category: lending
     tier: 1
     language: solidity
+    ecosystem: evm
   compound-v3:
     repo: compound-finance/comet
     category: lending
     tier: 1
     language: solidity
+    ecosystem: evm
   morpho-blue:
     repo: morpho-org/morpho-blue
     category: lending
     tier: 1
     language: solidity
-  maker-core:
-    repo: makerdao/dss
+    ecosystem: evm
+  compound-v2:
+    repo: compound-finance/compound-protocol
     category: lending
     tier: 2
     language: solidity
-  spark-psm:
-    repo: marsfoundation/spark-psm
-    category: lending
-    tier: 3
-    language: solidity
+    ecosystem: evm
   euler-v2:
     repo: euler-xyz/euler-vault-kit
     category: lending
     tier: 2
     language: solidity
-
-  # ---- liquid staking / restaking ----------------------------------------
-  lido-core:
-    repo: lidofinance/core
-    category: staking
-    tier: 1
-    language: solidity
-  rocketpool:
-    repo: rocket-pool/rocketpool
-    category: staking
+    ecosystem: evm
+  liquity:
+    repo: liquity/dev
+    category: lending
     tier: 2
     language: solidity
+    ecosystem: evm
+  liquity-bold:
+    repo: liquity/bold
+    category: lending
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  maker-core:
+    repo: sky-ecosystem/dss
+    category: lending
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  ajna:
+    repo: ajna-finance/ajna-core
+    category: lending
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  fraxlend:
+    repo: FraxFinance/fraxlend
+    category: lending
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  morpho-aave-optimizer:
+    repo: morpho-org/morpho-aavev3-optimizer
+    category: lending
+    tier: 3
+    language: solidity
+    ecosystem: evm
+    archived: true
+  silo-v3:
+    repo: silo-finance/silo-contracts-v3
+    category: lending
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  spark-psm:
+    repo: sparkdotfi/spark-psm
+    category: lending
+    tier: 3
+    language: solidity
+    ecosystem: evm
+
+  # ---- EVM — staking, liquid staking, restaking ----------------------
   eigenlayer:
     repo: Layr-Labs/eigenlayer-contracts
     category: staking
     tier: 1
     language: solidity
+    ecosystem: evm
+  lido-core:
+    repo: lidofinance/core
+    category: staking
+    tier: 1
+    language: solidity
+    ecosystem: evm
+  rocketpool:
+    repo: rocket-pool/rocketpool
+    category: staking
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  symbiotic:
+    repo: symbioticfi/core
+    category: staking
+    tier: 2
+    language: solidity
+    ecosystem: evm
   etherfi:
     repo: etherfi-protocol/smart-contracts
     category: staking
     tier: 3
     language: solidity
+    ecosystem: evm
+  frxeth:
+    repo: FraxFinance/frxETH-public
+    category: staking
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  stader-ethx:
+    repo: stader-labs/ethx
+    category: staking
+    tier: 3
+    language: solidity
+    ecosystem: evm
 
-  # ---- account abstraction / multisig ------------------------------------
+  # ---- EVM — account abstraction and multisigs -----------------------
   eth-infinitism-aa:
     repo: eth-infinitism/account-abstraction
     category: account
     tier: 1
     language: solidity
+    ecosystem: evm
   safe-contracts:
-    repo: safe-global/safe-smart-account
+    repo: safe-fndn/safe-smart-account
     category: account
     tier: 1
     language: solidity
-  seaport:
-    repo: ProjectOpenSea/seaport
-    category: marketplace
+    ecosystem: evm
+  light-account:
+    repo: alchemyplatform/light-account
+    category: account
     tier: 2
     language: solidity
-
-  # ---- bridges (historically the largest losses in the space) ------------
-  across:
-    repo: across-protocol/contracts
-    category: bridge
+    ecosystem: evm
+  safe-modules:
+    repo: safe-fndn/safe-modules
+    category: account
     tier: 2
     language: solidity
-  connext:
-    repo: connext/monorepo
-    category: bridge
+    ecosystem: evm
+  zerodev-kernel:
+    repo: zerodevapp/kernel
+    category: account
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  biconomy-scw:
+    repo: bcnmy/scw-contracts
+    category: account
     tier: 3
     language: solidity
-  layerzero-v2:
-    repo: LayerZero-Labs/LayerZero-v2
-    category: bridge
-    tier: 2
+    ecosystem: evm
+  modulekit:
+    repo: rhinestonewtf/modulekit
+    category: account
+    tier: 3
     language: solidity
+    ecosystem: evm
+    archived: true
+
+  # ---- EVM — bridges (historically the largest losses in the space) ----
+  ccip:
+    repo: smartcontractkit/ccip
+    category: bridge
+    tier: 1
+    language: solidity
+    ecosystem: evm
+    archived: true
   wormhole:
     repo: wormhole-foundation/wormhole
     category: bridge
     tier: 1
     language: solidity
+    ecosystem: evm
+  across:
+    repo: across-protocol/contracts
+    category: bridge
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  axelar-cgp:
+    repo: axelarnetwork/axelar-cgp-solidity
+    category: bridge
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  layerzero-v2:
+    repo: LayerZero-Labs/LayerZero-v2
+    category: bridge
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  stargate:
+    repo: stargate-protocol/stargate
+    category: bridge
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  celer-sgn:
+    repo: celer-network/sgn-v2-contracts
+    category: bridge
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  connext:
+    repo: connext/monorepo
+    category: bridge
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  debridge:
+    repo: debridge-finance/debridge-contracts-v1
+    category: bridge
+    tier: 3
+    language: solidity
+    ecosystem: evm
   hop-contracts:
     repo: hop-protocol/contracts
     category: bridge
     tier: 3
     language: solidity
+    ecosystem: evm
+  socket-dl:
+    repo: SocketDotTech/socket-DL
+    category: bridge
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  synapse:
+    repo: synapsecns/sanguine
+    category: bridge
+    tier: 3
+    language: solidity
+    ecosystem: evm
 
-  # ---- oracles / infra ----------------------------------------------------
+  # ---- EVM — oracles -------------------------------------------------
   chainlink:
     repo: smartcontractkit/chainlink
     category: oracle
     tier: 1
     language: go
-  pyth-crosschain:
-    repo: pyth-network/pyth-crosschain
+    ecosystem: evm
+  api3-airnode:
+    repo: api3dao/airnode
     category: oracle
-    tier: 2
-    language: rust
+    tier: 3
+    language: typescript
+    ecosystem: evm
+  redstone:
+    repo: redstone-finance/redstone-oracles-monorepo
+    category: oracle
+    tier: 3
+    language: typescript
+    ecosystem: evm
+  tellor:
+    repo: tellor-io/tellorFlex
+    category: oracle
+    tier: 3
+    language: solidity
+    ecosystem: evm
   uma-protocol:
     repo: UMAprotocol/protocol
     category: oracle
     tier: 3
     language: solidity
+    ecosystem: evm
 
-  # ---- non-EVM contract platforms ----------------------------------------
+  # ---- EVM — perpetuals and derivatives ------------------------------
+  gmx-synthetics:
+    repo: gmx-io/gmx-synthetics
+    category: perps
+    tier: 1
+    language: solidity
+    ecosystem: evm
+  dydx-v4:
+    repo: dydxprotocol/v4-chain
+    category: perps
+    tier: 2
+    language: go
+    ecosystem: evm
+  synthetix-v3:
+    repo: Synthetixio/synthetix-v3
+    category: perps
+    tier: 2
+    language: solidity
+    ecosystem: evm
+    archived: true
+  perp-curie:
+    repo: perpetual-protocol/perp-curie-contract
+    category: perps
+    tier: 3
+    language: solidity
+    ecosystem: evm
+
+  # ---- EVM — stablecoins ---------------------------------------------
+  angle-core:
+    repo: AngleProtocol/angle-core
+    category: stablecoin
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  reflexer-geb:
+    repo: reflexer-labs/geb
+    category: stablecoin
+    tier: 3
+    language: solidity
+    ecosystem: evm
+
+  # ---- EVM — yield ---------------------------------------------------
+  pendle-v2:
+    repo: pendle-finance/pendle-core-v2-public
+    category: yield
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  yearn-tokenized-strategy:
+    repo: yearn/tokenized-strategy
+    category: yield
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  yearn-vaults-v2:
+    repo: yearn/yearn-vaults-v2
+    category: yield
+    tier: 2
+    language: vyper
+    ecosystem: evm
+    archived: true
+  convex:
+    repo: convex-eth/platform
+    category: yield
+    tier: 3
+    language: solidity
+    ecosystem: evm
+
+  # ---- EVM — marketplaces --------------------------------------------
+  seaport:
+    repo: ProjectOpenSea/seaport
+    category: marketplace
+    tier: 2
+    language: solidity
+    ecosystem: evm
+
+  # ---- EVM — real-world assets ---------------------------------------
+  centrifuge:
+    repo: centrifuge/protocol
+    category: rwa
+    tier: 2
+    language: solidity
+    ecosystem: evm
+  goldfinch:
+    repo: goldfinch-eng/goldfinch-contracts
+    category: rwa
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  maple-v2:
+    repo: maple-labs/maple-core-v2
+    category: rwa
+    tier: 3
+    language: solidity
+    ecosystem: evm
+
+  # ---- EVM — supporting infrastructure -------------------------------
+  ens-contracts:
+    repo: ensdomains/ens-contracts
+    category: infra
+    tier: 1
+    language: solidity
+    ecosystem: evm
+  conditional-tokens:
+    repo: gnosis/conditional-tokens-contracts
+    category: infra
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  sablier:
+    repo: sablier-labs/evm-monorepo
+    category: infra
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  superfluid:
+    repo: superfluid-org/protocol-monorepo
+    category: infra
+    tier: 3
+    language: solidity
+    ecosystem: evm
+  unlock:
+    repo: unlock-protocol/unlock
+    category: infra
+    tier: 3
+    language: solidity
+    ecosystem: evm
+
+  # ---- Solana — the framework ----------------------------------------
+  anchor:
+    repo: otter-sec/anchor
+    category: framework
+    tier: 1
+    language: rust
+    ecosystem: solana
+
+  # ---- Solana — SPL and Metaplex, inherited by everything ------------
+  mpl-core:
+    repo: metaplex-foundation/mpl-core
+    category: library
+    tier: 1
+    language: rust
+    ecosystem: solana
+  mpl-token-metadata:
+    repo: metaplex-foundation/mpl-token-metadata
+    category: library
+    tier: 1
+    language: rust
+    ecosystem: solana
   solana-program-library:
     repo: solana-labs/solana-program-library
     category: library
     tier: 1
     language: rust
-  anchor:
-    repo: coral-xyz/anchor
-    category: framework
+    ecosystem: solana
+    archived: true
+  spl-token-2022:
+    repo: solana-program/token-2022
+    category: library
     tier: 1
     language: rust
-  openzeppelin-cairo:
-    repo: OpenZeppelin/cairo-contracts
+    ecosystem: solana
+  mpl-hybrid:
+    repo: metaplex-foundation/mpl-hybrid
     category: library
     tier: 3
-    language: cairo
+    language: rust
+    ecosystem: solana
+  spl-transfer-hook:
+    repo: solana-program/transfer-hook
+    category: library
+    tier: 3
+    language: rust
+    ecosystem: solana
+
+  # ---- Solana — exchanges --------------------------------------------
+  orca-whirlpools:
+    repo: orca-so/whirlpools
+    category: dex
+    tier: 1
+    language: rust
+    ecosystem: solana
+  raydium-amm:
+    repo: raydium-io/raydium-amm
+    category: dex
+    tier: 1
+    language: rust
+    ecosystem: solana
+  raydium-clmm:
+    repo: raydium-io/raydium-clmm
+    category: dex
+    tier: 1
+    language: rust
+    ecosystem: solana
+  meteora-damm-v2:
+    repo: MeteoraAg/damm-v2
+    category: dex
+    tier: 2
+    language: rust
+    ecosystem: solana
+  meteora-dlmm:
+    repo: MeteoraAg/dlmm-sdk
+    category: dex
+    tier: 2
+    language: rust
+    ecosystem: solana
+  openbook-v1:
+    repo: openbook-dex/program
+    category: dex
+    tier: 2
+    language: rust
+    ecosystem: solana
+  openbook-v2:
+    repo: openbook-dex/openbook-v2
+    category: dex
+    tier: 2
+    language: rust
+    ecosystem: solana
+  phoenix-v1:
+    repo: Ellipsis-Labs/phoenix-v1
+    category: dex
+    tier: 2
+    language: rust
+    ecosystem: solana
+  raydium-cp-swap:
+    repo: raydium-io/raydium-cp-swap
+    category: dex
+    tier: 2
+    language: rust
+    ecosystem: solana
+  autobahn:
+    repo: blockworks-foundation/autobahn
+    category: dex
+    tier: 3
+    language: rust
+    ecosystem: solana
+  meteora-bonding-curve:
+    repo: MeteoraAg/dynamic-bonding-curve
+    category: dex
+    tier: 3
+    language: rust
+    ecosystem: solana
+  plasma:
+    repo: Ellipsis-Labs/plasma
+    category: dex
+    tier: 3
+    language: rust
+    ecosystem: solana
+
+  # ---- Solana — lending ----------------------------------------------
+  kamino-klend:
+    repo: Kamino-Finance/klend
+    category: lending
+    tier: 1
+    language: rust
+    ecosystem: solana
+  marginfi-v2:
+    repo: 0dotxyz/marginfi-v2
+    category: lending
+    tier: 2
+    language: rust
+    ecosystem: solana
+  solend:
+    repo: solendprotocol/solana-program-library
+    category: lending
+    tier: 2
+    language: rust
+    ecosystem: solana
+  kamino-kvault:
+    repo: Kamino-Finance/kvault
+    category: lending
+    tier: 3
+    language: rust
+    ecosystem: solana
+
+  # ---- Solana — perpetuals -------------------------------------------
+  drift-v2:
+    repo: velocity-exchange/protocol-v2
+    category: perps
+    tier: 2
+    language: rust
+    ecosystem: solana
+    archived: true
+  mango-v4:
+    repo: blockworks-foundation/mango-v4
+    category: perps
+    tier: 2
+    language: rust
+    ecosystem: solana
+
+  # ---- Solana — stake pools and liquid staking -----------------------
+  jito-programs:
+    repo: jito-foundation/jito-programs
+    category: staking
+    tier: 1
+    language: rust
+    ecosystem: solana
+  marinade:
+    repo: marinade-finance/liquid-staking-program
+    category: staking
+    tier: 1
+    language: rust
+    ecosystem: solana
+  spl-stake-pool:
+    repo: solana-program/stake-pool
+    category: staking
+    tier: 1
+    language: rust
+    ecosystem: solana
+  jito-stakenet:
+    repo: jito-foundation/stakenet
+    category: staking
+    tier: 2
+    language: rust
+    ecosystem: solana
+  spl-single-pool:
+    repo: solana-program/single-pool
+    category: staking
+    tier: 3
+    language: rust
+    ecosystem: solana
+
+  # ---- Solana — multisigs and smart accounts -------------------------
+  squads-v4:
+    repo: Squads-Protocol/v4
+    category: account
+    tier: 1
+    language: rust
+    ecosystem: solana
+  squads-smart-account:
+    repo: Squads-Protocol/smart-account-program
+    category: account
+    tier: 2
+    language: rust
+    ecosystem: solana
+
+  # ---- Solana — oracles ----------------------------------------------
+  switchboard-solana:
+    repo: switchboard-xyz/solana-sdk
+    category: oracle
+    tier: 2
+    language: rust
+    ecosystem: solana
+  kamino-scope:
+    repo: Kamino-Finance/scope
+    category: oracle
+    tier: 3
+    language: rust
+    ecosystem: solana
+
+  # ---- Solana — supporting infrastructure ----------------------------
+  helium-programs:
+    repo: helium/helium-program-library
+    category: infra
+    tier: 2
+    language: rust
+    ecosystem: solana
+  voter-stake-registry:
+    repo: blockworks-foundation/voter-stake-registry
+    category: infra
+    tier: 3
+    language: rust
+    ecosystem: solana
+
+  # ---- Move / Aptos — the framework ----------------------------------
+  aptos-core:
+    repo: aptos-labs/aptos-core
+    category: library
+    tier: 1
+    language: move
+    ecosystem: aptos
   aptos-framework:
     repo: aptos-labs/aptos-framework
     category: library
+    tier: 1
+    language: move
+    ecosystem: aptos
+
+  # ---- Move / Aptos — exchanges --------------------------------------
+  econia:
+    repo: econia-labs/econia
+    category: dex
+    tier: 2
+    language: move
+    ecosystem: aptos
+    archived: true
+  liquidswap:
+    repo: pontem-network/liquidswap
+    category: dex
+    tier: 2
+    language: move
+    ecosystem: aptos
+  sea-protocol:
+    repo: sea-protocol/seaprotocol
+    category: dex
     tier: 3
     language: move
+    ecosystem: aptos
+  starswap:
+    repo: Elements-Studio/starswap-core
+    category: dex
+    tier: 3
+    language: move
+    ecosystem: aptos
+
+  # ---- Move / Aptos — supporting infrastructure ----------------------
+  aptos-names:
+    repo: aptos-labs/aptos-names-contracts
+    category: infra
+    tier: 3
+    language: move
+    ecosystem: aptos
+
+  # ---- Move / Sui — the framework and standard modules ---------------
+  openzeppelin-sui:
+    repo: OpenZeppelin/contracts-sui
+    category: library
+    tier: 1
+    language: move
+    ecosystem: sui
+  sui-framework:
+    repo: MystenLabs/sui
+    category: library
+    tier: 1
+    language: move
+    ecosystem: sui
+  suitears:
+    repo: interest-protocol/suitears
+    category: library
+    tier: 2
+    language: move
+    ecosystem: sui
+  kunalabs-sui:
+    repo: kunalabs-io/sui-smart-contracts
+    category: library
+    tier: 3
+    language: move
+    ecosystem: sui
+
+  # ---- Move / Sui — exchanges ----------------------------------------
+  deepbook-v3:
+    repo: MystenLabs/deepbookv3
+    category: dex
+    tier: 1
+    language: move
+    ecosystem: sui
+  cetus-clmm:
+    repo: CetusProtocol/cetus-contracts
+    category: dex
+    tier: 2
+    language: move
+    ecosystem: sui
+  cetus-clmm-interface:
+    repo: CetusProtocol/cetus-clmm-interface
+    category: dex
+    tier: 3
+    language: move
+    ecosystem: sui
+  turbos-clmm:
+    repo: turbos-finance/turbos-clmm-sdk
+    category: dex
+    tier: 3
+    language: move
+    ecosystem: sui
+
+  # ---- Move / Sui — lending ------------------------------------------
+  navi-contracts:
+    repo: naviprotocol/navi-smart-contracts
+    category: lending
+    tier: 2
+    language: move
+    ecosystem: sui
+  scallop-lending:
+    repo: scallop-io/sui-lending-protocol
+    category: lending
+    tier: 2
+    language: move
+    ecosystem: sui
+  suilend:
+    repo: suilend/suilend
+    category: lending
+    tier: 2
+    language: move
+    ecosystem: sui
+
+  # ---- Move / Sui — supporting infrastructure ------------------------
+  suins-contracts:
+    repo: MystenLabs/suins-contracts
+    category: infra
+    tier: 3
+    language: move
+    ecosystem: sui
+
+  # ---- Cairo / Starknet — libraries ----------------------------------
+  openzeppelin-cairo:
+    repo: OpenZeppelin/cairo-contracts
+    category: library
+    tier: 1
+    language: cairo
+    ecosystem: starknet
+
+  # ---- Cairo / Starknet — accounts -----------------------------------
+  argent-starknet:
+    repo: argentlabs/argent-contracts-starknet
+    category: account
+    tier: 2
+    language: cairo
+    ecosystem: starknet
+
+  # ---- Cairo / Starknet — exchanges ----------------------------------
+  jediswap:
+    repo: jediswaplabs/JediSwap
+    category: dex
+    tier: 3
+    language: cairo
+    ecosystem: starknet
+
+  # ---- cross-ecosystem -----------------------------------------------
+  pyth-crosschain:
+    repo: pyth-network/pyth-crosschain
+    category: oracle
+    tier: 1
+    language: rust
+    ecosystem: multi
+  move-language:
+    repo: move-language/move
+    category: framework
+    tier: 2
+    language: rust
+    ecosystem: multi
+    archived: true
+

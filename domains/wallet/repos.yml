@@ -111,13 +111,6 @@ repos:
     language: javascript
     custody: smart
     ecosystem: starknet
-  keplr:
-    repo: chainapsis/keplr-wallet
-    category: browser_extension
-    tier: 1
-    language: javascript
-    custody: self
-    ecosystem: cosmos
   cosmostation:
     repo: cosmostation/cosmostation-chrome-extension
     category: browser_extension
@@ -132,13 +125,6 @@ repos:
     language: javascript
     custody: self
     ecosystem: cosmos
-  backpack:
-    repo: coral-xyz/backpack
-    category: browser_extension
-    tier: 2
-    language: javascript
-    custody: self
-    ecosystem: solana
   polkadot-extension:
     repo: polkadot-js/extension
     category: browser_extension
@@ -203,6 +189,7 @@ repos:
     language: javascript
     custody: self
     ecosystem: evm
+    archived: true
   leather:
     repo: leather-io/extension
     category: browser_extension
@@ -341,13 +328,6 @@ repos:
     language: kotlin
     custody: self
     ecosystem: lightning
-  breez:
-    repo: breez/breezmobile
-    category: mobile
-    tier: 2
-    language: dart
-    custody: self
-    ecosystem: lightning
   zeus:
     repo: ZeusLN/zeus
     category: mobile
@@ -414,6 +394,7 @@ repos:
     language: javascript
     custody: self
     ecosystem: evm
+    archived: true
   status-desktop:
     repo: status-im/status-app
     category: desktop
@@ -671,6 +652,7 @@ repos:
     language: solidity
     custody: smart
     ecosystem: evm
+    archived: true
   openfort-contracts:
     repo: openfort-xyz/openfort-contracts
     category: smart_account
@@ -685,6 +667,7 @@ repos:
     language: solidity
     custody: smart
     ecosystem: evm
+    archived: true
   coinbase-smart-wallet:
     repo: coinbase/smart-wallet
     category: smart_account
@@ -871,6 +854,7 @@ repos:
     language: rust
     custody: mpc
     ecosystem: multi
+    archived: true
   dfns-sdk:
     repo: dfns/dfns-sdk-ts
     category: mpc_tss
@@ -1103,6 +1087,7 @@ repos:
     language: javascript
     custody: smart
     ecosystem: stellar
+    archived: true
   simplewebauthn:
     repo: MasterKale/SimpleWebAuthn
     category: wallet_sdk

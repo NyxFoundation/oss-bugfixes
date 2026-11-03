@@ -64,3 +64,32 @@ def test_shipped_registries_all_parse():
         reg = registry.load(domain)
         assert len(reg) > 0
         assert reg.description, f"{domain}: registry has no description"
+
+
+def test_registries_carry_no_obviously_dead_entries():
+    """A registry IS the coverage claim, so a slug nobody can clone is a false
+    claim. This cannot reach the network in CI, so it checks the shape only —
+    `oss-bugfixes audit` is what checks reality, and the first audit of the
+    40-entry smartcontract registry found one deleted repo and four that had
+    moved organisation."""
+    for domain in paths.list_domains():
+        if not paths.registry_path(domain).exists():
+            continue
+        for repo in registry.load(domain):
+            assert "/" in repo.repo, f"{domain}/{repo.slug}: not owner/name"
+            assert not repo.repo.endswith(".git"), f"{domain}/{repo.slug}"
+            assert " " not in repo.repo, f"{domain}/{repo.slug}"
+
+
+def test_smartcontract_covers_more_than_solidity():
+    """`smart contract` is not one language. A corpus that is only Solidity
+    cannot say anything about account-validation bugs on Solana or capability
+    bugs in Move."""
+    reg = registry.load("smartcontract")
+    ecosystems = {r.extra.get("ecosystem") for r in reg}
+    assert {"evm", "solana", "sui", "aptos"} <= ecosystems
+    langs = {r.language for r in reg}
+    assert {"solidity", "rust", "move"} <= langs
+    for eco in ("solana", "sui", "aptos"):
+        n = sum(1 for r in reg if r.extra.get("ecosystem") == eco)
+        assert n >= 5, f"{eco}: only {n} repos — too few to say anything"

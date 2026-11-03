@@ -184,8 +184,9 @@ repos:
     tier: 1
     language: c
     privilege: libc
+    archived: true
   musl:
-    repo: bminor/musl
+    repo: kraj/musl
     category: libc
     tier: 2
     language: c
@@ -212,12 +213,6 @@ repos:
     repo: openssh/openssh-portable
     category: userland
     tier: 1
-    language: c
-    privilege: userland
-  dbus:
-    repo: freedesktop/dbus
-    category: userland
-    tier: 3
     language: c
     privilege: userland
   util-linux:

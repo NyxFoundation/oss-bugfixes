@@ -162,6 +162,7 @@ repos:
     tier: 2
     language: java
     primitive: aead
+    archived: true
 
   # ---- post-quantum -------------------------------------------------------
   liboqs:
@@ -176,6 +177,7 @@ repos:
     tier: 1
     language: c
     primitive: pq
+    archived: true
   kyber-ref:
     repo: pq-crystals/kyber
     category: reference
@@ -233,7 +235,7 @@ repos:
     language: javascript
     primitive: zk
   gnark:
-    repo: Consensys/gnark
+    repo: Consensys-Incorporated/gnark
     category: library
     tier: 1
     language: go

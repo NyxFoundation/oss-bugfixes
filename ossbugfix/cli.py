@@ -143,6 +143,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("status", help="what each stage has done so far")
     p.add_argument("--domain", help="one domain, or every domain if omitted")
 
+    p = sub.add_parser("audit",
+                       help="check the registry still describes reality — "
+                            "renamed, transferred, archived or deleted repos")
+    selection(p)
+    p.add_argument("--workers", type=int, default=8)
+    p.add_argument("--quiet", action="store_true", help="only show problems")
+    p.add_argument("--fix", action="store_true",
+                   help="rewrite moved names in the registry file, in place")
+
     p = sub.add_parser("migrate",
                        help="bring an existing table up to the current schema")
     p.add_argument("--domain", help="one domain, or every domain if omitted")
@@ -190,6 +199,8 @@ def _dispatch(args: argparse.Namespace) -> int:
 
     if cmd == "repos":
         return _cmd_repos(repos, args.json)
+    if cmd == "audit":
+        return _cmd_audit(args, repos)
     if cmd == "mirror":
         rep = pipeline.run_mirror(args.domain, repos, workers=args.workers,
                                   refresh=args.refresh, hydrate=args.hydrate,
@@ -318,6 +329,38 @@ def _cmd_run(args: argparse.Namespace, repos) -> int:
     for rep in reports:
         print(rep)
     return 1 if any(r.failed for r in reports) else 0
+
+
+def _cmd_audit(args: argparse.Namespace, repos) -> int:
+    """A registry is this project's coverage claim, and claims rot."""
+    from . import audit as audit_mod
+
+    findings = audit_mod.audit(repos, workers=args.workers)
+    problems = [f for f in findings if f.needs_attention]
+    for f in findings:
+        if f.needs_attention or not args.quiet:
+            print(f.line())
+
+    if not problems:
+        print(f"\n{args.domain}: all {len(findings)} entries still describe reality")
+        return 0
+
+    by_status: dict[str, int] = {}
+    for f in problems:
+        by_status[f.status] = by_status.get(f.status, 0) + 1
+    print(f"\n{args.domain}: {len(problems)} of {len(findings)} need attention — "
+          + ", ".join(f"{v} {k}" for k, v in sorted(by_status.items())))
+
+    moved = [f for f in problems if "moved" in f.status]
+    if args.fix and moved:
+        n = audit_mod.apply_fixes(args.domain, problems)
+        print(f"rewrote {n} moved name(s) in {paths.registry_path(args.domain).name}")
+        print("archived and missing entries are NOT auto-fixed: whether to keep "
+              "an archived\nhistory, or drop a deleted repo, is a judgement about "
+              "the corpus, not a lookup.")
+    elif moved:
+        print("pass --fix to rewrite the moved names")
+    return 1
 
 
 def _cmd_migrate(args: argparse.Namespace) -> int:
