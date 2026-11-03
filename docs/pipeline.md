@@ -201,6 +201,32 @@ conclusions", and their absence is labelled as normal rather than as evidence �
 output produces `is_bugfix=<NA>` with the error recorded. A corpus where
 failures silently became `false` is a corpus whose negatives cannot be trusted.
 
+### Choosing a model: prefer one that answers over one that thinks
+
+Measured on the same commits, same prompts, one model at a time:
+
+| | per commit | decided |
+|---|---:|---:|
+| `gpt-oss:120b` (max-tokens 2,000) | **2.6 s** | 3/3 |
+| `glm-5.3-flash` (max-tokens 4,000) | 38.6 s | 2/3 |
+
+A reasoning model spends its budget before it emits anything, which makes it
+slow on exactly the commits worth reading — the ones with a real diff to work
+through — and makes running out of budget *silent*. In a whole-corpus sweep
+that compounds: the easy commits finish early, and what is left is the subset
+the model thinks hardest about. Throughput on the remainder fell to 2.4
+commits/minute with the reasoning model and rose to 67.9 with the other. The
+same six workers.
+
+Two warnings, both learned here:
+
+* **Benchmark one model at a time.** Six models measured in parallel produced
+  a ranking that was really a measure of contention, and it pointed at the
+  wrong model.
+* **Benchmark on the commits you still have to do.** Measuring on the head of
+  the corpus measures the easy ones. The gap above only appears on the rows
+  that had already failed once.
+
 ---
 
 ## Resuming, and what to do when something breaks
