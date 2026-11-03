@@ -215,6 +215,31 @@ the current CSV counts. To retry just the failures, delete their entries from
 so that a human debugging a skipped repository can do this — or re-run the stage
 with `--force`.
 
+### The classify stage, specifically
+
+| symptom | cause | fix |
+|---|---|---|
+| every call returns `403 error code: 1010` | **not rate limiting.** Cloudflare blocks urllib's default `Python-urllib/3.x` announcement. Measured against the same endpoint, key and moment: `curl/8.0` → 200, no UA → 200, `Python-urllib/3.12` → **403** | a `User-Agent` is now always sent; override with `OSS_BUGFIXES_USER_AGENT` |
+| a third of rows come back undecided, blank | a reasoning model spends its token budget before emitting anything, so running out is silent — empty `content`, or JSON cut mid-object | `--max-tokens` (default 4,000) |
+| a rerun never retries the failures | a row carrying a classifier but no verdict was counted as done | fixed: a row is done when it has a verdict, or when a human set it. A failure is work still owed |
+| more workers make it slower | real, and not the above. Measured on this endpoint: **6 workers → 14.5 commits/min, 16 workers → 10.0** — four of sixteen threads sat in backoff | 6 is the measured plateau here. Measure yours; do not assume |
+
+That third row is the expensive one. 2,375 commits — 42% of a domain — were
+recorded as permanently unclassifiable, and the corpus gave no sign of it: the
+rows existed, carried a classifier name, and held `<NA>`, which is
+indistinguishable from an engine that looked and declined. The distinction the
+code lacked was *declined* versus *never answered*.
+
+**A caution about measuring any of this.** Every latency figure taken through
+this client before the User-Agent fix was wrong. Blocked-and-retried calls
+read as a slow endpoint, which produced a "model benchmark" (11.8 s alone,
+35.8 s under load) and a confident conclusion that throughput was
+concurrency-limited. Both were artefacts of one missing header. When a sweep
+looks slow, check what the endpoint says to a single `curl` before theorising
+about load.
+
+### General
+
 | symptom | cause | fix |
 |---|---|---|
 | walk says `not attempted (blobless mirror)` | backport detection needs file contents | `mirror --hydrate` |
